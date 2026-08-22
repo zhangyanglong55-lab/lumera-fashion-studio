@@ -24,7 +24,7 @@ function SideRays({ side = "left" }: { side?: "left" | "right" }) {
   </div>;
 }
 
-function BallpitBackdrop() {
+function BallpitBackdrop({ scrollRef }: { scrollRef: React.RefObject<HTMLElement | null> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -40,6 +40,8 @@ function BallpitBackdrop() {
     let height = 1;
     let frame = 0;
     let dpr = 1;
+    let lastScrollLeft = scrollRef.current?.scrollLeft || 0;
+    let scrollImpulse = 0;
     let balls: Array<{ x: number; y: number; vx: number; vy: number; radius: number; color: string; mass: number }> = [];
 
     const createBalls = () => {
@@ -76,6 +78,19 @@ function BallpitBackdrop() {
       pointer.y = event.clientY - rect.top;
       pointer.active = pointer.x >= 0 && pointer.x <= width && pointer.y >= 0 && pointer.y <= height;
     };
+    const onHorizontalScroll = () => {
+      const scroller = scrollRef.current;
+      if (!scroller) return;
+      const delta = scroller.scrollLeft - lastScrollLeft;
+      lastScrollLeft = scroller.scrollLeft;
+      scrollImpulse = Math.max(-3.2, Math.min(3.2, scrollImpulse * .45 + delta * .035));
+      const progress = scroller.scrollLeft / Math.max(1, window.innerWidth);
+      const levels = [.78, .22, .12, 0, 1];
+      const left = Math.max(0, Math.min(levels.length - 1, Math.floor(progress)));
+      const right = Math.min(levels.length - 1, left + 1);
+      const mix = Math.max(0, Math.min(1, progress - left));
+      canvas.style.opacity = String(levels[left] * (1 - mix) + levels[right] * mix);
+    };
     const drawBall = (ball: (typeof balls)[number]) => {
       const gradient = context.createRadialGradient(ball.x - ball.radius * .32, ball.y - ball.radius * .38, ball.radius * .08, ball.x, ball.y, ball.radius);
       gradient.addColorStop(0, ball.color === "#111713" ? "#637067" : "#ffffff");
@@ -95,6 +110,7 @@ function BallpitBackdrop() {
       for (let i = 0; i < balls.length; i += 1) {
         const ball = balls[i];
         if (!reducedMotion) {
+          ball.vx += scrollImpulse * .055;
           ball.vy += .018;
           if (pointer.active) {
             const dx = ball.x - pointer.x;
@@ -150,20 +166,24 @@ function BallpitBackdrop() {
         }
         drawBall(ball);
       }
+      scrollImpulse *= .86;
       if (!reducedMotion) frame = requestAnimationFrame(animate);
     };
     const observer = new ResizeObserver(resize);
     observer.observe(host);
     window.addEventListener("pointermove", onPointerMove, { passive: true });
+    scrollRef.current?.addEventListener("scroll", onHorizontalScroll, { passive: true });
     resize();
+    onHorizontalScroll();
     animate();
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener("pointermove", onPointerMove);
+      scrollRef.current?.removeEventListener("scroll", onHorizontalScroll);
     };
-  }, []);
-  return <canvas ref={canvasRef} className="ballpit-backdrop" aria-hidden="true" />;
+  }, [scrollRef]);
+  return <canvas ref={canvasRef} className="ballpit-backdrop global-ballpit" aria-hidden="true" />;
 }
 
 export default function Dashboard() {
@@ -193,6 +213,7 @@ export default function Dashboard() {
       <div className="nav-actions"><a className="nav-login" href="/admin">管理入口</a><a className="nav-cta" href="#studio">开始制作 <span>↗</span></a></div>
       <button className="mobile-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label="切换菜单">{menuOpen ? "×" : "☰"}</button>
     </header>
+    <BallpitBackdrop scrollRef={storefrontRef}/>
 
     <section id="top" className="commerce-hero">
       <SideRays side="right"/>
@@ -231,7 +252,7 @@ export default function Dashboard() {
       <TestWorkspace embedded />
     </section>
 
-    <footer className="public-footer footer-ballpit"><SideRays side="right"/><BallpitBackdrop/><div className="footer-ballpit-copy"><span className="section-label">COMMERCE CONTENT, IN MOTION</span><a className="lumera-logo" href="#top"><span>L</span><b>LUMERA</b></a><h2>让商品内容生产，<br/>更快、更稳、<em>更一致。</em></h2><p>从第一张商品图，到每一次品牌表达。</p><div className="footer-actions"><a href="#studio">开始制作 <span>↗</span></a><a href="/admin">进入运营后台</a></div></div><small>© 2026 LUMERA Commerce Content Studio</small></footer>
+    <footer className="public-footer footer-ballpit"><SideRays side="right"/><div className="footer-ballpit-copy"><span className="section-label">COMMERCE CONTENT, IN MOTION</span><a className="lumera-logo" href="#top"><span>L</span><b>LUMERA</b></a><h2>让商品内容生产，<br/>更快、更稳、<em>更一致。</em></h2><p>从第一张商品图，到每一次品牌表达。</p><div className="footer-actions"><a href="#studio">开始制作 <span>↗</span></a><a href="/admin">进入运营后台</a></div></div><small>© 2026 LUMERA Commerce Content Studio</small></footer>
     <aside className="horizontal-guide" aria-label="横向页面导航"><button onClick={() => goToSlide(currentSlide - 1)} disabled={currentSlide === 0} aria-label="上一页">←</button><div className="guide-status"><span>{String(currentSlide + 1).padStart(2,"0")} / {String(slideNames.length).padStart(2,"0")}</span><b>{slideNames[currentSlide]}</b><small>左右滑动浏览</small></div><div className="guide-dots">{slideNames.map((name,index) => <button key={name} className={index === currentSlide ? "active" : ""} onClick={() => goToSlide(index)} aria-label={`前往${name}`}/>)}</div><button onClick={() => goToSlide(currentSlide + 1)} disabled={currentSlide === slideNames.length - 1} aria-label="下一页">→</button></aside>
   </main>;
 }
