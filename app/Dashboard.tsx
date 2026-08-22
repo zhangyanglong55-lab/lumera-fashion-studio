@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TestWorkspace } from "./test/page";
 
 const services = [
@@ -11,7 +11,21 @@ const services = [
 
 export default function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
-  return <main className="storefront">
+  const storefrontRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const container = storefrontRef.current;
+    if (!container) return;
+    const onWheel = (event: WheelEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest(".production-section") && Math.abs(event.deltaY) > Math.abs(event.deltaX)) return;
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      event.preventDefault();
+      container.scrollBy({ left: event.deltaY * 1.25, behavior: "smooth" });
+    };
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => container.removeEventListener("wheel", onWheel);
+  }, []);
+  return <main className="storefront" ref={storefrontRef}>
     <header className="public-nav">
       <a className="lumera-logo" href="#top" aria-label="LUMERA 首页"><span>L</span><b>LUMERA</b><small>电商视觉工场</small></a>
       <nav className={menuOpen ? "open" : ""}><a href="#capabilities">解决方案</a><a href="#showcase">效果展示</a><a href="#studio">制作中心</a><a href="/admin">运营后台</a></nav>
