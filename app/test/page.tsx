@@ -13,6 +13,12 @@ const requiredAgents = [
 ] as const;
 const initialStages: StageMap = { parent: "waiting", white: "waiting", hollow: "waiting", video: "waiting" };
 
+const videoTemplates = [
+  { id: "snap-loop", code: "A", name: "响指循环变装", description: "固定正面机位，右手响指触发丝滑换装，结尾回到开场造型。", preview: "/references/reference.mp4", prompt: "采用模板 A：固定正面中景，人物每次用右手打响指后触发连续布料重构，六次变装，结尾回到首套造型形成无缝循环。" },
+  { id: "studio-turn", code: "B", name: "转身棚拍切换", description: "轻微转身与整理衣摆，在动作遮挡中自然完成造型切换。", cover: "/references/look-04.jpeg", prompt: "采用模板 B：高级摄影棚固定中景，人物以轻微左右转身、抬手整理衣摆和包袋为动作衔接，在身体自然运动的遮挡阶段连续完成服装演化；节奏舒缓、优雅，不使用闪切。" },
+  { id: "runway-step", code: "C", name: "走秀步点变装", description: "小幅向前走动，每个步点完成一次完整造型演化。", cover: "/references/look-03.jpeg", prompt: "采用模板 C：人物始终位于画面中心，在摄影棚内进行克制的小幅向前走秀；每个清晰步点触发一次全身服装连续重构，镜头保持稳定，动作与服装演化节拍严格同步。" },
+] as const;
+
 function collectAssetUrls(value: unknown, found = new Set<string>()): string[] {
   if (typeof value === "string" && (/^(https?:|data:image|data:video)/.test(value))) found.add(value);
   else if (Array.isArray(value)) value.forEach((item) => collectAssetUrls(item, found));
@@ -37,6 +43,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState("");
   const [retryLimit, setRetryLimit] = useState("2");
+  const [selectedTemplate, setSelectedTemplate] = useState(videoTemplates[0].id);
   const [stages, setStages] = useState<StageMap>(initialStages);
   const [configured, setConfigured] = useState<string[]>([]);
   const [connections, setConnections] = useState<Record<string, Connection>>({});
@@ -150,7 +157,8 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
     if (!configured.includes("snap-change-video") && !active["snap-change-video"]?.url) return setMessage("第三步还缺少动态商拍服务。");
     setMessage(""); setRunning(true); setStage("video", "running");
     try {
-      let video = await callAgent("snap-change-video", { looks: results.hollow.map((item) => item.output), parameters: { duration: 10, aspectRatio: "9:16", fps: 30 } }, active["snap-change-video"], parentTaskId);
+      const template = videoTemplates.find(item => item.id === selectedTemplate) || videoTemplates[0];
+      let video = await callAgent("snap-change-video", { looks: results.hollow.map((item) => item.output), videoTemplate: { id: template.id, name: template.name, prompt: template.prompt, referenceVideo: template.preview }, parameters: { duration: 10, aspectRatio: "9:16", fps: 30 } }, active["snap-change-video"], parentTaskId);
       if (video.status === "processing" && video.externalTaskId) {
         setMessage("视频任务已提交，正在等待星图生成，请勿关闭页面……");
         for (let attempt = 0; attempt < 60 && video.status === "processing"; attempt += 1) {
@@ -175,6 +183,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
       {files.length > 0 && <div className="upload-list">{files.map((file, index) => <article key={`${file.name}-${file.lastModified}`}><img src={previews[index]} alt={file.name}/><div><b>{file.name}</b><small>{(file.size / 1024 / 1024).toFixed(2)} MB</small></div><button type="button" disabled={running} onClick={() => removeFile(index)} aria-label={`移除 ${file.name}`}>×</button></article>)}</div>}
       <div className="connection-check"><b>生产服务状态</b><span>{configured.length}/4 已就绪</span>{configured.length < 4 && <a href="/admin">联系管理员配置 ↗</a>}</div>
       <div className="formrow"><div className="field"><label>造型套数</label><input value={`${Math.max(files.length, 1)} 套`} readOnly/></div><div className="field"><label>失败重试</label><select value={retryLimit} disabled={running} onChange={(event) => setRetryLimit(event.target.value)}><option value="2">2 次</option><option value="1">1 次</option><option value="0">不重试</option></select></div></div>
+      <div className="template-picker"><header><div><span>VIDEO TEMPLATE</span><b>选择动态视频模板</b></div><small>已选择 {videoTemplates.find(item => item.id === selectedTemplate)?.code}</small></header><div className="template-grid">{videoTemplates.map(template => <button type="button" key={template.id} className={selectedTemplate === template.id ? "selected" : ""} onClick={() => setSelectedTemplate(template.id)} disabled={running}>{template.preview ? <video src={template.preview} muted playsInline loop autoPlay/> : <img src={template.cover} alt=""/>}<span className="template-code">{template.code}</span><div><b>{template.name}</b><p>{template.description}</p></div><i>{selectedTemplate === template.id ? "✓" : ""}</i></button>)}</div></div>
       <div className="manual-stage-actions"><button className="primary full" onClick={runWhiteStage} disabled={running}>{stages.white === "done" ? "重新生成商品净图" : "第一步 · 生成商品净图"}</button><button className="primary full" onClick={runHollowStage} disabled={running || stages.white !== "done"}>{stages.hollow === "done" ? "重新生成穿搭陈列" : "下一步 · 生成穿搭陈列"}</button><button className="primary full" onClick={runVideoStage} disabled={running || stages.hollow !== "done"}>{stages.video === "done" ? "重新生成动态视频" : "下一步 · 生成动态商拍"}</button></div>{message && <div className={`test-message ${message.startsWith("已完成") ? "success" : "error"}`}>{message}</div>}
     </div><div className="test-panel result-workspace"><span className="workspace-step">PROJECT OUTPUT</span><h2>素材生成进度</h2><div className="tree">
       <div className={`tree-node parent ${stages.parent}`}><span className="num">◆</span><div><b>项目准备</b><small>素材检查与生成计划</small></div><span>{statusText(stages.parent)}</span></div><div className="tree-line"/>

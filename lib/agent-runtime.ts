@@ -132,19 +132,20 @@ async function postAgent(agentId: AgentId, target: { url: string; token?: string
   }
 
   if (agentId === "snap-change-video" && isModelVerse(target.url)) {
-    const input = request.input as { phase?: string; taskId?: string };
+    const input = request.input as { phase?: string; taskId?: string; videoTemplate?: { prompt?: string; referenceVideo?: string } };
     const authorization = target.token || "";
     if (input.phase === "poll" && input.taskId) {
       return fetch(`https://api.modelverse.cn/v1/tasks/status?task_id=${encodeURIComponent(input.taskId)}`, { headers: { Authorization: authorization } });
     }
     const firstFrame = findImage(request.input);
     if (!firstFrame) throw new Error("星图视频接口没有收到有效的镂空穿搭首帧图");
+    const templatePrompt = input.videoTemplate?.prompt ? `\n\n视频模板要求：${input.videoTemplate.prompt}` : "";
     return fetch("https://api.modelverse.cn/v1/tasks/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: authorization },
       body: JSON.stringify({
         model: "MiniMax-Hailuo-2.3",
-        input: { first_frame_image: firstFrame, prompt },
+        input: { first_frame_image: firstFrame, prompt: `${prompt}${templatePrompt}`, reference_video: input.videoTemplate?.referenceVideo },
         parameters: { duration: 10, resolution: "768P", prompt_optimizer: true, fast_pretreatment: false, aigc_watermark: false },
       }),
     });
