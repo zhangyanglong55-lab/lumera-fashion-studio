@@ -1,0 +1,9 @@
+{
+  "id": "fashion-orchestrator",
+  "name": "变装总导演（父智能体）",
+  "version": "1.0.0",
+  "children": ["product-white-bg", "hollow-look", "snap-change-video"],
+  "execution": "sequential-with-batch-stage",
+  "retryLimit": 2,
+  "resultMode": "parent-child-tree"
+}

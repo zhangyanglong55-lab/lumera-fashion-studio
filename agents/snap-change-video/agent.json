@@ -1,0 +1,9 @@
+{
+  "id": "snap-change-video",
+  "name": "响指变装视频智能体",
+  "version": "1.0.0",
+  "input": ["5 张镂空穿搭参考图", "可选人物身份参考图", "可选动作参考视频"],
+  "output": ["10 秒 9:16 响指连续变装视频"],
+  "durationSeconds": 10,
+  "defaultFps": 30
+}

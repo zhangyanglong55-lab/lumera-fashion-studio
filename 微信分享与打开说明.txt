@@ -1,0 +1,29 @@
+SnapFlow 多智能体工作室｜分享与打开说明
+
+一、直接在线使用（推荐）
+打开：
+https://snapflow-fashion-agents.zhangyanglong55.chatgpt.site/
+
+对方不需要安装软件，浏览器打开即可查看页面。
+API Key 不包含在分享文件中；如需实际生成图片或视频，对方需要配置自己的 API Key。
+
+二、本地运行完整项目
+适合开发人员或希望部署自己版本的用户。
+
+环境要求：Node.js 22.13 或更高版本。
+
+1. 解压“SnapFlow完整项目.zip”。
+2. 在解压目录打开终端。
+3. 执行：npm install
+4. 执行：npm run dev
+5. 浏览器打开终端显示的本地网址，通常是 http://localhost:3000/
+
+三、文件说明
+- app：页面和 API 路由
+- lib：智能体定义、提示词和第三方平台适配
+- public：参考图片与视频
+- agents：三个子智能体配置
+- API接入说明.md：接口接入文档
+
+安全提醒：
+本压缩包不包含创建者浏览器中保存的 API Key。请勿通过微信发送任何完整 API Key、密码或账号验证码。

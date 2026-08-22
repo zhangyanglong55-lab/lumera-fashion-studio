@@ -1,0 +1,9 @@
+{
+  "id": "hollow-look",
+  "name": "镂空穿搭智能体",
+  "version": "1.0.0",
+  "input": ["一张或多张白底商品图", "可选参考构图"],
+  "output": ["无人物镂空人形穿搭图"],
+  "defaultAspectRatio": "9:16",
+  "defaultResolution": "1080x1920"
+}

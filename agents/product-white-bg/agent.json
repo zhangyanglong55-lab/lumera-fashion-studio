@@ -1,0 +1,9 @@
+{
+  "id": "product-white-bg",
+  "name": "白底净图智能体",
+  "version": "1.0.0",
+  "input": ["商品原图"],
+  "output": ["纯白背景商品图", "透明背景商品图（可选）"],
+  "defaultAspectRatio": "1:1",
+  "defaultResolution": "2048x2048"
+}
