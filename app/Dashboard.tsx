@@ -9,6 +9,20 @@ const services = [
   { no: "03", title: "动态商拍", text: "保持人物与服装一致性，通过自然响指动作完成连续变装，生成社媒短视频。", meta: "多套造型 → 10 秒竖版视频" },
 ];
 const slideNames = ["品牌首页", "内容流程", "效果展示", "制作中心", "关于我们"];
+function SideRays({ side = "left" }: { side?: "left" | "right" }) {
+  return <div className={`side-rays side-rays-${side}`} aria-hidden="true">
+    {Array.from({ length: 8 }, (_, index) => <i key={index} style={{
+      "--ray-blur": `${7 + index}px`,
+      "--ray-opacity": String(.62 - index * .045),
+      "--ray-duration": `${5.4 + index * .52}s`,
+      "--ray-delay": `${index * -.62}s`,
+      "--ray-left-start": `${-36 + index * 8}deg`,
+      "--ray-left-end": `${-24 + index * 8}deg`,
+      "--ray-right-start": `${36 - index * 8}deg`,
+      "--ray-right-end": `${24 - index * 8}deg`,
+    } as React.CSSProperties} />)}
+  </div>;
+}
 
 export default function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -39,6 +53,7 @@ export default function Dashboard() {
     </header>
 
     <section id="top" className="commerce-hero">
+      <SideRays side="right"/>
       <div className="hero-glow glow-one"/><div className="hero-glow glow-two"/>
       <div className="commerce-hero-copy">
         <span className="hero-tag"><i/> AI POWERED COMMERCE CONTENT</span>
@@ -57,21 +72,24 @@ export default function Dashboard() {
     </section>
 
     <section id="capabilities" className="capabilities-block">
+      <SideRays side="left"/>
       <header><div><span className="section-label">PRODUCTION FLOW</span><h2>一条真正可控的<br/>电商内容生产线</h2></div><p>不是一次性黑盒生成。每完成一个环节，先检查结果；确认满意后，再进入下一步。</p></header>
       <div className="service-grid">{services.map((item) => <article key={item.no}><div className="service-number">{item.no}</div><div className="service-icon">{item.no === "01" ? "◐" : item.no === "02" ? "◇" : "▶"}</div><h3>{item.title}</h3><p>{item.text}</p><footer>{item.meta}<span>↗</span></footer></article>)}</div>
     </section>
 
     <section id="showcase" className="showcase-block">
+      <SideRays side="right"/>
       <div className="showcase-copy"><span className="section-label">CONSISTENT OUTPUT</span><h2>从静态商品，<br/>到可投放的动态内容。</h2><p>统一的商品颜色、材质和造型语言，贯穿白底图、穿搭图与视频，减少反复修图和跨团队沟通。</p><div className="proof-list"><span><b>01</b>商品颜色与材质保真</span><span><b>02</b>穿搭比例与配件完整</span><span><b>03</b>人物身份与动作连续</span></div></div>
       <div className="showcase-gallery">{[1,2,4,5].map((n, index) => <figure key={n} className={`gallery-${index + 1}`}><img src={`/references/look-0${n}.jpeg`} alt={`电商穿搭效果 ${n}`}/><figcaption>LOOK / 0{n}</figcaption></figure>)}</div>
     </section>
 
     <section id="studio" className="production-section">
+      <SideRays side="left"/>
       <header className="production-heading"><span className="section-label">CONTENT STUDIO</span><h2>开始创建商品视觉</h2><p>上传商品图，按照三个步骤逐项生成并确认结果。</p></header>
       <TestWorkspace embedded />
     </section>
 
-    <footer className="public-footer"><a className="lumera-logo" href="#top"><span>L</span><b>LUMERA</b></a><p>让商品内容生产，更快、更稳、更一致。</p><div><a href="#studio">制作中心</a><a href="/admin">运营后台</a></div><small>© 2026 LUMERA Commerce Content Studio</small></footer>
+    <footer className="public-footer"><SideRays side="right"/><a className="lumera-logo" href="#top"><span>L</span><b>LUMERA</b></a><p>让商品内容生产，更快、更稳、更一致。</p><div><a href="#studio">制作中心</a><a href="/admin">运营后台</a></div><small>© 2026 LUMERA Commerce Content Studio</small></footer>
     <aside className="horizontal-guide" aria-label="横向页面导航"><button onClick={() => goToSlide(currentSlide - 1)} disabled={currentSlide === 0} aria-label="上一页">←</button><div className="guide-status"><span>{String(currentSlide + 1).padStart(2,"0")} / {String(slideNames.length).padStart(2,"0")}</span><b>{slideNames[currentSlide]}</b><small>左右滑动浏览</small></div><div className="guide-dots">{slideNames.map((name,index) => <button key={name} className={index === currentSlide ? "active" : ""} onClick={() => goToSlide(index)} aria-label={`前往${name}`}/>)}</div><button onClick={() => goToSlide(currentSlide + 1)} disabled={currentSlide === slideNames.length - 1} aria-label="下一页">→</button></aside>
   </main>;
 }
