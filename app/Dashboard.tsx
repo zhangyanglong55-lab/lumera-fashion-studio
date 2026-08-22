@@ -24,6 +24,148 @@ function SideRays({ side = "left" }: { side?: "left" | "right" }) {
   </div>;
 }
 
+function BallpitBackdrop() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const host = canvas.parentElement;
+    if (!host) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const palette = ["#d7ff44", "#183522", "#111713", "#e9ece4"];
+    const pointer = { x: -1000, y: -1000, active: false };
+    let width = 1;
+    let height = 1;
+    let frame = 0;
+    let dpr = 1;
+    let balls: Array<{ x: number; y: number; vx: number; vy: number; radius: number; color: string; mass: number }> = [];
+
+    const createBalls = () => {
+      const count = width < 700 ? 12 : 24;
+      balls = Array.from({ length: count }, (_, index) => {
+        const radius = (width < 700 ? 18 : 25) + Math.random() * (width < 700 ? 18 : 32);
+        const edge = index % 3 === 0;
+        return {
+          x: edge ? (index % 2 ? radius + Math.random() * width * .18 : width - radius - Math.random() * width * .18) : radius + Math.random() * (width - radius * 2),
+          y: height * (.52 + Math.random() * .38),
+          vx: (Math.random() - .5) * .55,
+          vy: (Math.random() - .5) * .35,
+          radius,
+          color: palette[index % palette.length],
+          mass: radius * radius,
+        };
+      });
+    };
+    const resize = () => {
+      const rect = host.getBoundingClientRect();
+      width = Math.max(1, rect.width);
+      height = Math.max(1, rect.height);
+      dpr = Math.min(window.devicePixelRatio || 1, 1.6);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      createBalls();
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = event.clientX - rect.left;
+      pointer.y = event.clientY - rect.top;
+      pointer.active = pointer.x >= 0 && pointer.x <= width && pointer.y >= 0 && pointer.y <= height;
+    };
+    const drawBall = (ball: (typeof balls)[number]) => {
+      const gradient = context.createRadialGradient(ball.x - ball.radius * .32, ball.y - ball.radius * .38, ball.radius * .08, ball.x, ball.y, ball.radius);
+      gradient.addColorStop(0, ball.color === "#111713" ? "#637067" : "#ffffff");
+      gradient.addColorStop(.16, ball.color);
+      gradient.addColorStop(.72, ball.color);
+      gradient.addColorStop(1, "#050706");
+      context.beginPath();
+      context.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      context.fillStyle = gradient;
+      context.fill();
+      context.strokeStyle = ball.color === "#d7ff44" ? "rgba(215,255,68,.55)" : "rgba(255,255,255,.12)";
+      context.lineWidth = 1;
+      context.stroke();
+    };
+    const animate = () => {
+      context.clearRect(0, 0, width, height);
+      for (let i = 0; i < balls.length; i += 1) {
+        const ball = balls[i];
+        if (!reducedMotion) {
+          ball.vy += .018;
+          if (pointer.active) {
+            const dx = ball.x - pointer.x;
+            const dy = ball.y - pointer.y;
+            const distance = Math.hypot(dx, dy) || 1;
+            const reach = ball.radius + 115;
+            if (distance < reach) {
+              const force = (reach - distance) / reach;
+              ball.vx += (dx / distance) * force * .32;
+              ball.vy += (dy / distance) * force * .32;
+            }
+          }
+          ball.x += ball.vx;
+          ball.y += ball.vy;
+          ball.vx *= .995;
+          ball.vy *= .995;
+          if (ball.x - ball.radius < 0 || ball.x + ball.radius > width) {
+            ball.x = Math.max(ball.radius, Math.min(width - ball.radius, ball.x));
+            ball.vx *= -.76;
+          }
+          if (ball.y + ball.radius > height - 4) {
+            ball.y = height - ball.radius - 4;
+            ball.vy *= -.68;
+            ball.vx += (Math.random() - .5) * .025;
+          }
+          if (ball.y - ball.radius < height * .37) {
+            ball.y = height * .37 + ball.radius;
+            ball.vy = Math.abs(ball.vy) * .7;
+          }
+          for (let j = i + 1; j < balls.length; j += 1) {
+            const other = balls[j];
+            const dx = other.x - ball.x;
+            const dy = other.y - ball.y;
+            const distance = Math.hypot(dx, dy) || 1;
+            const minimum = ball.radius + other.radius;
+            if (distance < minimum) {
+              const overlap = (minimum - distance) * .5;
+              const nx = dx / distance;
+              const ny = dy / distance;
+              ball.x -= nx * overlap;
+              ball.y -= ny * overlap;
+              other.x += nx * overlap;
+              other.y += ny * overlap;
+              const impulse = (other.vx - ball.vx) * nx + (other.vy - ball.vy) * ny;
+              if (impulse < 0) {
+                ball.vx += impulse * nx * .48;
+                ball.vy += impulse * ny * .48;
+                other.vx -= impulse * nx * .48;
+                other.vy -= impulse * ny * .48;
+              }
+            }
+          }
+        }
+        drawBall(ball);
+      }
+      if (!reducedMotion) frame = requestAnimationFrame(animate);
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(host);
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    resize();
+    animate();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("pointermove", onPointerMove);
+    };
+  }, []);
+  return <canvas ref={canvasRef} className="ballpit-backdrop" aria-hidden="true" />;
+}
+
 export default function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -89,7 +231,7 @@ export default function Dashboard() {
       <TestWorkspace embedded />
     </section>
 
-    <footer className="public-footer"><SideRays side="right"/><a className="lumera-logo" href="#top"><span>L</span><b>LUMERA</b></a><p>让商品内容生产，更快、更稳、更一致。</p><div><a href="#studio">制作中心</a><a href="/admin">运营后台</a></div><small>© 2026 LUMERA Commerce Content Studio</small></footer>
+    <footer className="public-footer footer-ballpit"><SideRays side="right"/><BallpitBackdrop/><div className="footer-ballpit-copy"><span className="section-label">COMMERCE CONTENT, IN MOTION</span><a className="lumera-logo" href="#top"><span>L</span><b>LUMERA</b></a><h2>让商品内容生产，<br/>更快、更稳、<em>更一致。</em></h2><p>从第一张商品图，到每一次品牌表达。</p><div className="footer-actions"><a href="#studio">开始制作 <span>↗</span></a><a href="/admin">进入运营后台</a></div></div><small>© 2026 LUMERA Commerce Content Studio</small></footer>
     <aside className="horizontal-guide" aria-label="横向页面导航"><button onClick={() => goToSlide(currentSlide - 1)} disabled={currentSlide === 0} aria-label="上一页">←</button><div className="guide-status"><span>{String(currentSlide + 1).padStart(2,"0")} / {String(slideNames.length).padStart(2,"0")}</span><b>{slideNames[currentSlide]}</b><small>左右滑动浏览</small></div><div className="guide-dots">{slideNames.map((name,index) => <button key={name} className={index === currentSlide ? "active" : ""} onClick={() => goToSlide(index)} aria-label={`前往${name}`}/>)}</div><button onClick={() => goToSlide(currentSlide + 1)} disabled={currentSlide === slideNames.length - 1} aria-label="下一页">→</button></aside>
   </main>;
 }
