@@ -56,11 +56,15 @@ export async function POST(request: Request) {
   const poster = form.get("poster");
   if (video instanceof File && video.size) {
     if (!video.type.startsWith("video/")) return Response.json({ error: "视频文件格式不正确" }, { status: 400 });
+    const previousKey = videoKey;
     const stored = await storeFile(video, id, "video"); videoUrl = stored.url; videoKey = stored.key;
+    if (previousKey && previousKey !== stored.key) await bindings.TEMPLATE_MEDIA.delete(previousKey);
   }
   if (poster instanceof File && poster.size) {
     if (!poster.type.startsWith("image/")) return Response.json({ error: "封面文件格式不正确" }, { status: 400 });
+    const previousKey = posterKey;
     const stored = await storeFile(poster, id, "poster"); posterUrl = stored.url; posterKey = stored.key;
+    if (previousKey && previousKey !== stored.key) await bindings.TEMPLATE_MEDIA.delete(previousKey);
   }
   const now = new Date().toISOString();
   const values = {
