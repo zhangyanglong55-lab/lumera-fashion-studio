@@ -268,7 +268,7 @@ export default function Dashboard() {
 
     <section id="video-gallery" className="video-gallery-section">
       <SideRays side="left"/>
-      <header><div><span className="section-label">VIDEO PROMPT GALLERY</span><h2>从一个提示词，<br/>找到下一条视频灵感。</h2></div><p>观看案例、打开完整提示词，或直接一键复制到你的生成工具中使用。</p></header>
+      <header><div><span className="section-label">VIDEO PROMPT GALLERY</span><h2>选取模板提示词</h2></div><p>观看案例、打开完整提示词，或直接一键复制到你的生成工具中使用。</p></header>
       <div className="video-prompt-grid">{gallerySlots.map((video, index) => video ? <article className={`video-prompt-card card-depth-${index % 3}`} key={video.id}>
         <div className="video-frame">{video.videoUrl ? <video src={video.videoUrl} poster={video.posterUrl} muted loop autoPlay playsInline preload="metadata"/> : <div className="video-placeholder"><span>▶</span></div>}<span className="video-index">0{index + 1}</span><b>{video.category}</b></div>
         <div className="video-card-copy"><div><h3>{video.title}</h3><p>{video.description}</p></div><div className="video-card-actions"><button onClick={() => setSelectedPrompt(video)}>查看提示词</button><button className="copy-prompt-button" onClick={() => copyPrompt(video)}>{copiedPrompt === video.id ? "已复制 ✓" : "复制完整提示词"}</button></div></div>
