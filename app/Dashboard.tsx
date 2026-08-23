@@ -42,21 +42,25 @@ function BallpitBackdrop({ scrollRef }: { scrollRef: React.RefObject<HTMLElement
     let dpr = 1;
     let lastScrollLeft = scrollRef.current?.scrollLeft || 0;
     let scrollImpulse = 0;
-    let balls: Array<{ x: number; y: number; vx: number; vy: number; radius: number; color: string; mass: number }> = [];
+    let balls: Array<{ x: number; y: number; vx: number; vy: number; radius: number; color: string; mass: number; response: number; damping: number }> = [];
 
     const createBalls = () => {
       const count = width < 700 ? 12 : 24;
       balls = Array.from({ length: count }, (_, index) => {
         const radius = (width < 700 ? 18 : 25) + Math.random() * (width < 700 ? 18 : 32);
         const edge = index % 3 === 0;
+        const group = index % 10;
+        const response = group < 3 ? .025 + Math.random() * .035 : group < 7 ? .22 + Math.random() * .2 : .62 + Math.random() * .28;
         return {
           x: edge ? (index % 2 ? radius + Math.random() * width * .18 : width - radius - Math.random() * width * .18) : radius + Math.random() * (width - radius * 2),
           y: height * (.52 + Math.random() * .38),
-          vx: (Math.random() - .5) * .55,
+          vx: (Math.random() - .5) * .55 * (.35 + response),
           vy: (Math.random() - .5) * .35,
           radius,
           color: palette[index % palette.length],
           mass: radius * radius,
+          response,
+          damping: .987 + Math.random() * .009,
         };
       });
     };
@@ -110,7 +114,7 @@ function BallpitBackdrop({ scrollRef }: { scrollRef: React.RefObject<HTMLElement
       for (let i = 0; i < balls.length; i += 1) {
         const ball = balls[i];
         if (!reducedMotion) {
-          ball.vx += scrollImpulse * .055;
+          ball.vx += scrollImpulse * .062 * ball.response * Math.min(1.25, 1800 / ball.mass);
           ball.vy += .018;
           if (pointer.active) {
             const dx = ball.x - pointer.x;
@@ -125,7 +129,7 @@ function BallpitBackdrop({ scrollRef }: { scrollRef: React.RefObject<HTMLElement
           }
           ball.x += ball.vx;
           ball.y += ball.vy;
-          ball.vx *= .995;
+          ball.vx *= ball.damping;
           ball.vy *= .995;
           if (ball.x - ball.radius < 0 || ball.x + ball.radius > width) {
             ball.x = Math.max(ball.radius, Math.min(width - ball.radius, ball.x));
@@ -135,6 +139,7 @@ function BallpitBackdrop({ scrollRef }: { scrollRef: React.RefObject<HTMLElement
             ball.y = height - ball.radius - 4;
             ball.vy *= -.68;
             ball.vx += (Math.random() - .5) * .025;
+            ball.vx *= .975;
           }
           if (ball.y - ball.radius < height * .37) {
             ball.y = height * .37 + ball.radius;
