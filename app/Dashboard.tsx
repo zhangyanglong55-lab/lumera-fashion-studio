@@ -8,7 +8,8 @@ const services = [
   { no: "02", title: "穿搭陈列", text: "将多件商品组合成完整造型，生成具有真实体积、层次与材质的隐形人台陈列图。", meta: "白底单品 → 完整穿搭造型" },
   { no: "03", title: "动态商拍", text: "保持人物与服装一致性，通过自然响指动作完成连续变装，生成社媒短视频。", meta: "多套造型 → 10 秒竖版视频" },
 ];
-const slideNames = ["品牌首页", "内容流程", "效果展示", "制作中心", "关于我们"];
+type PromptVideo = { id: string; title: string; category: string; description: string; prompt: string; videoUrl?: string; posterUrl?: string; enabled: boolean; sortOrder: number };
+const slideNames = ["品牌首页", "内容流程", "效果展示", "视频灵感", "制作中心", "关于我们"];
 function SideRays({ side = "left" }: { side?: "left" | "right" }) {
   return <div className={`side-rays side-rays-${side}`} aria-hidden="true">
     {Array.from({ length: 8 }, (_, index) => <i key={index} style={{
@@ -89,7 +90,7 @@ function BallpitBackdrop({ scrollRef }: { scrollRef: React.RefObject<HTMLElement
       lastScrollLeft = scroller.scrollLeft;
       scrollImpulse = Math.max(-3.2, Math.min(3.2, scrollImpulse * .45 + delta * .035));
       const progress = scroller.scrollLeft / Math.max(1, window.innerWidth);
-      const levels = [.78, .22, .12, 0, 1];
+      const levels = [.78, .22, .12, .18, 0, 1];
       const left = Math.max(0, Math.min(levels.length - 1, Math.floor(progress)));
       const right = Math.min(levels.length - 1, left + 1);
       const mix = Math.max(0, Math.min(1, progress - left));
@@ -194,6 +195,9 @@ function BallpitBackdrop({ scrollRef }: { scrollRef: React.RefObject<HTMLElement
 export default function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [promptVideos, setPromptVideos] = useState<PromptVideo[]>([]);
+  const [selectedPrompt, setSelectedPrompt] = useState<PromptVideo | null>(null);
+  const [copiedPrompt, setCopiedPrompt] = useState("");
   const storefrontRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const container = storefrontRef.current;
@@ -210,11 +214,22 @@ export default function Dashboard() {
     container.addEventListener("scroll", onScroll, { passive: true });
     return () => { container.removeEventListener("wheel", onWheel); container.removeEventListener("scroll", onScroll); };
   }, []);
+  useEffect(() => {
+    fetch("/api/prompt-videos").then(response => response.ok ? response.json() : Promise.reject()).then(data => setPromptVideos(data.videos || [])).catch(() => setPromptVideos([]));
+  }, []);
   function goToSlide(index: number) { storefrontRef.current?.scrollTo({ left: Math.max(0, Math.min(slideNames.length - 1, index)) * window.innerWidth, behavior: "smooth" }); }
+  async function copyPrompt(video: PromptVideo) {
+    try { await navigator.clipboard.writeText(video.prompt); }
+    catch {
+      const textarea = document.createElement("textarea"); textarea.value = video.prompt; document.body.appendChild(textarea); textarea.select(); document.execCommand("copy"); textarea.remove();
+    }
+    setCopiedPrompt(video.id); setTimeout(() => setCopiedPrompt(""), 1800);
+  }
+  const gallerySlots = Array.from({ length: 6 }, (_, index) => promptVideos[index] || null);
   return <main className="storefront" ref={storefrontRef}>
     <header className="public-nav">
       <a className="lumera-logo" href="#top" aria-label="LUMERA 首页"><span>L</span><b>LUMERA</b><small>电商视觉工场</small></a>
-      <nav className={menuOpen ? "open" : ""}><a href="#capabilities">解决方案</a><a href="#showcase">效果展示</a><a href="#studio">制作中心</a><a href="/admin">运营后台</a></nav>
+      <nav className={menuOpen ? "open" : ""}><a href="#capabilities">解决方案</a><a href="#showcase">效果展示</a><a href="#video-gallery">视频灵感</a><a href="#studio">制作中心</a><a href="/admin">运营后台</a></nav>
       <div className="nav-actions"><a className="nav-login" href="/admin">管理入口</a><a className="nav-cta" href="#studio">开始制作 <span>↗</span></a></div>
       <button className="mobile-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label="切换菜单">{menuOpen ? "×" : "☰"}</button>
     </header>
@@ -251,6 +266,15 @@ export default function Dashboard() {
       <div className="showcase-gallery">{[1,2,4,5].map((n, index) => <figure key={n} className={`gallery-${index + 1}`}><img src={`/references/look-0${n}.jpeg`} alt={`电商穿搭效果 ${n}`}/><figcaption>LOOK / 0{n}</figcaption></figure>)}</div>
     </section>
 
+    <section id="video-gallery" className="video-gallery-section">
+      <SideRays side="left"/>
+      <header><div><span className="section-label">VIDEO PROMPT GALLERY</span><h2>从一个提示词，<br/>找到下一条视频灵感。</h2></div><p>观看案例、打开完整提示词，或直接一键复制到你的生成工具中使用。</p></header>
+      <div className="video-prompt-grid">{gallerySlots.map((video, index) => video ? <article className={`video-prompt-card card-depth-${index % 3}`} key={video.id}>
+        <div className="video-frame">{video.videoUrl ? <video src={video.videoUrl} poster={video.posterUrl} muted loop autoPlay playsInline preload="metadata"/> : <div className="video-placeholder"><span>▶</span></div>}<span className="video-index">0{index + 1}</span><b>{video.category}</b></div>
+        <div className="video-card-copy"><div><h3>{video.title}</h3><p>{video.description}</p></div><div className="video-card-actions"><button onClick={() => setSelectedPrompt(video)}>查看提示词</button><button className="copy-prompt-button" onClick={() => copyPrompt(video)}>{copiedPrompt === video.id ? "已复制 ✓" : "复制完整提示词"}</button></div></div>
+      </article> : <article className={`video-prompt-card video-prompt-empty card-depth-${index % 3}`} key={`empty-${index}`}><div className="video-frame"><div className="video-placeholder"><span>＋</span><small>COMING SOON</small></div><span className="video-index">0{index + 1}</span></div><div className="video-card-copy"><div><h3>待发布视频模板</h3><p>运营后台上传视频与提示词后将在这里展示。</p></div></div></article>)}</div>
+    </section>
+
     <section id="studio" className="production-section">
       <SideRays side="left"/>
       <header className="production-heading"><span className="section-label">CONTENT STUDIO</span><h2>开始创建商品视觉</h2><p>上传商品图，按照三个步骤逐项生成并确认结果。</p></header>
@@ -258,6 +282,7 @@ export default function Dashboard() {
     </section>
 
     <footer className="public-footer footer-ballpit"><SideRays side="right"/><div className="footer-ballpit-copy"><span className="section-label">COMMERCE CONTENT, IN MOTION</span><a className="lumera-logo" href="#top"><span>L</span><b>LUMERA</b></a><h2>让商品内容生产，<br/>更快、更稳、<em>更一致。</em></h2><p>从第一张商品图，到每一次品牌表达。</p><div className="footer-actions"><a href="#studio">开始制作 <span>↗</span></a><a href="/admin">进入运营后台</a></div></div><small>© 2026 LUMERA Commerce Content Studio</small></footer>
+    {selectedPrompt && <div className="prompt-dialog-backdrop" role="presentation" onClick={() => setSelectedPrompt(null)}><section className="prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="prompt-dialog-title" onClick={event => event.stopPropagation()}><header><span>{selectedPrompt.category}</span><button onClick={() => setSelectedPrompt(null)} aria-label="关闭提示词">×</button></header><h2 id="prompt-dialog-title">{selectedPrompt.title}</h2><p>{selectedPrompt.description}</p><div className="prompt-dialog-content">{selectedPrompt.prompt}</div><footer><span>{selectedPrompt.prompt.length} 字符 · 完整提示词</span><button onClick={() => copyPrompt(selectedPrompt)}>{copiedPrompt === selectedPrompt.id ? "已复制完整提示词 ✓" : "复制全部提示词"}</button></footer></section></div>}
     <aside className="horizontal-guide" aria-label="横向页面导航"><button onClick={() => goToSlide(currentSlide - 1)} disabled={currentSlide === 0} aria-label="上一页">←</button><div className="guide-status"><span>{String(currentSlide + 1).padStart(2,"0")} / {String(slideNames.length).padStart(2,"0")}</span><b>{slideNames[currentSlide]}</b><small>左右滑动浏览</small></div><div className="guide-dots">{slideNames.map((name,index) => <button key={name} className={index === currentSlide ? "active" : ""} onClick={() => goToSlide(index)} aria-label={`前往${name}`}/>)}</div><button onClick={() => goToSlide(currentSlide + 1)} disabled={currentSlide === slideNames.length - 1} aria-label="下一页">→</button></aside>
   </main>;
 }
