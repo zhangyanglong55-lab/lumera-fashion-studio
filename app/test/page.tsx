@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 type StageState = "waiting" | "running" | "done" | "failed";
+type StudioView = "setup" | "white" | "hollow" | "tryon" | "video";
 type StageMap = Record<"parent" | "white" | "hollow" | "tryon" | "video", StageState>;
 type Connection = { url?: string; token?: string };
 type AgentResult = { status?: string; output?: unknown; error?: string; taskId?: string; externalTaskId?: string; lookId?: string; category?: string };
@@ -52,6 +53,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [videoTemplates, setVideoTemplates] = useState<VideoTemplate[]>([...defaultVideoTemplates]);
   const [selectedTemplate, setSelectedTemplate] = useState(defaultVideoTemplates[0].id);
   const [stages, setStages] = useState<StageMap>(initialStages);
+  const [studioView, setStudioView] = useState<StudioView>("setup");
   const [configured, setConfigured] = useState<string[]>([]);
   const [connections, setConnections] = useState<Record<string, Connection>>({});
   const [connectionSaved, setConnectionSaved] = useState(false);
@@ -127,7 +129,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   }
 
   function activeConnections() {
-    return embedded ? JSON.parse(window.localStorage.getItem("lumera-connections") || window.localStorage.getItem("snapflow-connections") || "{}") as Record<string, Connection> : connections;
+    return embedded ? {} : connections;
   }
 
   async function runWhiteStage() {
@@ -147,6 +149,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
       activeStage = "white"; setStage("white", "running");
       const white = await Promise.all(images.map(async (image, index) => ({...(await callAgent("product-white-bg", { image, lookId: fileMeta[index]?.lookId || "look-1", category:fileMeta[index]?.category || "上衣", productIndex: index }, active["product-white-bg"], taskId)),lookId:fileMeta[index]?.lookId || "look-1",category:fileMeta[index]?.category || "上衣"})));
       setResults((current) => ({ ...current, white })); setStage("white", "done");
+      setStudioView("white");
       setMessage("已完成第一步。请检查白底图，满意后点击“下一步：生成镂空图”。");
     } catch (error) { setStage(activeStage, "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setRunning(false); }
@@ -161,6 +164,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
       const hollow: AgentResult[] = [];
       for (let index = 0; index < outfitCount; index += 1) { const lookId=`look-${index+1}`; const products=results.white.filter(item=>item.lookId===lookId).map(item=>({category:item.category,asset:item.output})); if(products.length) hollow.push({...await callAgent("hollow-look", { lookId, products }, active["hollow-look"], parentTaskId),lookId}); }
       setResults((current) => ({ ...current, hollow })); setStage("hollow", "done");
+      setStudioView("hollow");
       setMessage("已完成第二步。请检查穿搭陈列图，满意后点击“下一步：生成动态视频”。");
     } catch (error) { setStage("hollow", "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setRunning(false); }
@@ -175,7 +179,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
     try {
       const personImage = await asDataUrl(personFile); const tryon:AgentResult[]=[];
       for (const hollow of results.hollow) { let result=await callAgent("virtual-try-on",{personImage,outfitImage:hollow.output,lookId:hollow.lookId},active["virtual-try-on"],parentTaskId); if(result.status==="processing"&&result.externalTaskId){setMessage("真人试穿任务处理中，请稍候……"); for(let attempt=0;attempt<60&&result.status==="processing";attempt+=1){await new Promise(resolve=>setTimeout(resolve,3000)); result=await callAgent("virtual-try-on",{phase:"poll",taskId:result.externalTaskId},active["virtual-try-on"],parentTaskId);}} if(result.status==="processing") throw new Error("真人试穿等待超时，请稍后重试"); tryon.push({...result,lookId:hollow.lookId}); }
-      setResults(current=>({...current,tryon})); setStage("tryon","done"); setMessage("已完成真人试穿。请检查人物身份和服装，满意后再生成动态视频。");
+      setResults(current=>({...current,tryon})); setStage("tryon","done"); setStudioView("tryon"); setMessage("已完成真人试穿。请检查人物身份和服装，满意后再生成动态视频。");
     } catch(error){setStage("tryon","failed");setMessage(error instanceof Error?error.message:String(error));} finally{setRunning(false);}
   }
 
@@ -196,12 +200,45 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
       }
       if (video.status === "processing") throw new Error("星图视频生成等待超时，请稍后重试或前往星图模型日志查看任务。");
       setResults((current) => ({ ...current, video: [video] })); setStage("video", "done");
+      setStudioView("video");
       setMessage("已完成第三步，动态商拍视频已生成并保留在结果区。");
     } catch (error) { setStage("video", "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setRunning(false); }
   }
 
   const statusText = (state: StageState) => ({ waiting: "等待", running: "处理中", done: "✓ 通过", failed: "✕ 失败" })[state];
+  if (embedded) {
+    const steps: Array<{id:StudioView; number:string; name:string; note:string; unlocked:boolean; done:boolean}> = [
+      {id:"setup",number:"01",name:"人物与造型",note:"上传人物与商品并完成分组",unlocked:true,done:stages.white==="done"},
+      {id:"white",number:"02",name:"商品净图",note:"检查每件商品的标准白底图",unlocked:stages.white==="done",done:stages.hollow==="done"},
+      {id:"hollow",number:"03",name:"穿搭陈列",note:"检查每套隐形人台组合效果",unlocked:stages.hollow==="done",done:stages.tryon==="done"},
+      {id:"tryon",number:"04",name:"真人试穿",note:"核对人物身份和服装细节",unlocked:stages.tryon==="done",done:stages.video==="done"},
+      {id:"video",number:"05",name:"动态视频",note:"选择模板并生成最终视频",unlocked:stages.tryon==="done",done:stages.video==="done"},
+    ];
+    const current = steps.find(item=>item.id===studioView) || steps[0];
+    const outfitFiles = (lookIndex:number) => files.map((file,index)=>({file,index})).filter(({index})=>(fileMeta[index]?.lookId||"look-1")===`look-${lookIndex+1}`);
+    return <div className="studio-wizard">
+      <header className="wizard-topbar"><a href="/" className="wizard-brand"><span>L</span><b>LUMERA</b><small>制作工作台</small></a><div className="wizard-project"><i/><span>新建电商素材项目</span><small>生成结果将保留在当前页面</small></div><a href="/" className="wizard-exit">退出工作台 ↗</a></header>
+      <div className="wizard-shell">
+        <aside className="wizard-stepper"><span className="wizard-eyebrow">PRODUCTION FLOW</span><h1>五步完成<br/>商品动态内容</h1><nav>{steps.map(step=><button key={step.id} type="button" disabled={!step.unlocked} className={`${studioView===step.id?"active":""} ${step.done?"complete":""}`} onClick={()=>setStudioView(step.id)}><span>{step.done?"✓":step.number}</span><div><b>{step.name}</b><small>{step.note}</small></div></button>)}</nav><p>每一步确认后才会进入下一步，已有结果可以随时返回查看。</p></aside>
+        <main className="wizard-main"><header className="wizard-stage-head"><div><span>STEP {current.number} / 05</span><h2>{current.name}</h2><p>{current.note}</p></div><div className="wizard-progress"><span style={{width:`${Number(current.number)*20}%`}}/></div></header>
+          {studioView==="setup" && <section className="wizard-stage-content setup-stage">
+            <div className="setup-intro"><h3>先建立人物身份，再组织每套造型</h3><p>人物图会贯穿所有试穿结果；商品按造型分组后，每组会独立生成一套完整穿搭。</p></div>
+            <div className="setup-grid"><article className="person-setup-card"><span className="card-label">人物基准</span><input id="wizard-person" className="file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>setPersonFile(event.target.files?.[0])}/><label htmlFor="wizard-person">{personPreview?<img src={personPreview} alt="人物基准预览"/>:<div className="empty-upload"><b>＋</b><strong>上传正面全身人物图</strong><small>单人、双手双脚完整、背景简洁</small></div>}</label>{personFile&&<button type="button" onClick={()=>setPersonFile(undefined)}>更换人物图</button>}</article>
+              <div className="outfit-setup"><div className="outfit-setup-head"><div><span className="card-label">造型分组</span><h3>{outfitCount} 套造型</h3></div><div><button type="button" onClick={()=>setOutfitCount(value=>Math.max(1,value-1))} disabled={outfitCount<=1||running}>−</button><button type="button" onClick={()=>setOutfitCount(value=>Math.min(5,value+1))} disabled={outfitCount>=5||running}>＋</button></div></div>
+                <input id="wizard-products" className="file-input" type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event)=>{const selected=Array.from(event.target.files||[]);setFiles(selected);setFileMeta(selected.map((_,index)=>({lookId:`look-${Math.min(index+1,outfitCount)}`,category:"上衣"})));}}/><label className="compact-upload" htmlFor="wizard-products">＋ 添加商品图片</label>
+                <div className="outfit-card-grid">{Array.from({length:outfitCount},(_,lookIndex)=><article className="outfit-card" key={lookIndex}><header><span>LOOK {String(lookIndex+1).padStart(2,"0")}</span><b>{outfitFiles(lookIndex).length} 件商品</b></header><div className="outfit-assets">{outfitFiles(lookIndex).map(({file,index})=><div className="outfit-asset" key={`${file.name}-${index}`}><img src={previews[index]} alt={file.name}/><select value={fileMeta[index]?.category||"上衣"} onChange={event=>setFileMeta(items=>items.map((item,i)=>i===index?{...item,category:event.target.value}:item))}>{garmentCategories.map(category=><option key={category}>{category}</option>)}</select><select value={fileMeta[index]?.lookId||"look-1"} onChange={event=>setFileMeta(items=>items.map((item,i)=>i===index?{...item,lookId:event.target.value}:item))}>{Array.from({length:outfitCount},(_,i)=><option key={i} value={`look-${i+1}`}>造型 {i+1}</option>)}</select><button type="button" onClick={()=>removeFile(index)}>×</button></div>)}{!outfitFiles(lookIndex).length&&<p>从上方添加商品，再将商品分配到此造型</p>}</div></article>)}</div>
+              </div></div><footer className="wizard-actions"><div><b>{personFile&&files.length?"素材已准备":"等待素材"}</b><small>{personFile?"人物图已上传":"还需人物图"} · {files.length?`${files.length} 件商品已上传`:"还需商品图"}</small></div><button className="wizard-primary" onClick={runWhiteStage} disabled={running||!personFile||!files.length}>{running?"正在处理…":"开始生成商品净图 →"}</button></footer>
+          </section>}
+          {studioView==="white" && <section className="wizard-stage-content review-stage"><div className="review-copy"><h3>逐件检查商品轮廓和颜色</h3><p>确认主体完整、背景纯白、没有残留人物或复杂背景，再进入穿搭组合。</p></div><StageResults title="商品净图" results={results.white} onPreview={setPreviewImage}/><footer className="wizard-actions"><button className="wizard-secondary" onClick={runWhiteStage} disabled={running}>重新生成</button><button className="wizard-primary" onClick={runHollowStage} disabled={running}>确认，生成穿搭陈列 →</button></footer></section>}
+          {studioView==="hollow" && <section className="wizard-stage-content review-stage"><div className="review-copy"><h3>检查每套造型的完整度</h3><p>确认服装、鞋履、包袋和配饰位置合理，没有人体露出或悬空穿帮。</p></div><StageResults title="穿搭陈列" results={results.hollow} onPreview={setPreviewImage}/><footer className="wizard-actions"><button className="wizard-secondary" onClick={runHollowStage} disabled={running}>重新生成</button><button className="wizard-primary" onClick={runTryOnStage} disabled={running||!personFile}>确认，生成真人试穿 →</button></footer></section>}
+          {studioView==="tryon" && <section className="wizard-stage-content review-stage"><div className="review-copy"><h3>核对人物身份与服装细节</h3><p>重点检查脸型、发型、身材比例和四肢是否一致，以及服装是否真正贴合人物。</p></div><div className="identity-compare">{personPreview&&<article><span>人物基准</span><img src={personPreview} alt="人物基准"/></article>}<StageResults title="真人试穿" results={results.tryon} onPreview={setPreviewImage}/></div><footer className="wizard-actions"><button className="wizard-secondary" onClick={runTryOnStage} disabled={running}>重新生成</button><button className="wizard-primary" onClick={()=>setStudioView("video")} disabled={running}>确认，选择视频模板 →</button></footer></section>}
+          {studioView==="video" && <section className="wizard-stage-content video-stage"><div className="review-copy"><h3>选择动态模板并生成成片</h3><p>模板决定人物动作、换装节奏和镜头语言；生成前可以反复切换预览。</p></div><div className="wizard-template-grid">{videoTemplates.map(template=><button type="button" key={template.id} className={selectedTemplate===template.id?"selected":""} onClick={()=>setSelectedTemplate(template.id)}>{template.previewUrl||template.preview?<video src={template.previewUrl||template.preview} muted loop autoPlay playsInline/>:<img src={template.cover||"/references/look-03.jpeg"} alt=""/>}<span>{template.code}</span><div><b>{template.name}</b><small>{template.description}</small></div><i>{selectedTemplate===template.id?"✓":""}</i></button>)}</div>{results.video.length>0&&<StageResults title="最终动态视频" results={results.video} onPreview={setPreviewImage}/>}<footer className="wizard-actions"><div><b>{videoTemplates.find(item=>item.id===selectedTemplate)?.name}</b><small>10 秒 · 9:16 · 30fps</small></div><button className="wizard-primary" onClick={runVideoStage} disabled={running}>{running?"正在生成视频…":results.video.length?"重新生成视频":"生成最终视频 →"}</button></footer></section>}
+          {message&&<div className={`wizard-message ${message.startsWith("已完成")?"success":"error"}`}>{message}</div>}
+        </main>
+      </div>{previewImage&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setPreviewImage(undefined)}><button type="button" onClick={()=>setPreviewImage(undefined)}>×</button><img src={previewImage} alt="生成结果细节" onClick={event=>event.stopPropagation()}/></div>}
+    </div>;
+  }
   return <div className={`test-shell ${embedded ? "embedded-test-shell" : ""}`}>{!embedded && <header className="test-head"><div><span className="kicker">UNIFIED WORKSPACE</span><h1>API 配置与流水线测试台</h1><p>在一个页面完成接口接入、素材上传、分阶段生成与结果验收。</p></div><a className="back" href="/">← 返回调度中心</a></header>}
     {!embedded && <section className="inline-api"><div className="inline-api-head"><div><span className="kicker">01 · API CONNECTIONS</span><h2>智能体接口接入</h2><p>配置保存在当前浏览器，保存后可直接在下方运行。</p></div><button className="primary" onClick={saveConnections}>{connectionSaved ? "已保存 ✓" : "保存全部 API"}</button></div>
       <div className="api-grid compact-api-grid">{requiredAgents.map(([id, name], index) => { const colors = ["#ffcf58", "#ff8a4c", "#8a6cff", "#d7ff44", "#31c7a2"]; const ready = Boolean(connections[id]?.url); const placeholder = id === "orchestrator" ? "https://api.deepseek.com/chat/completions" : id === "product-white-bg" ? "https://api.remove.bg/v1.0/removebg" : id === "hollow-look" ? "https://api.modelverse.cn/v1/images/generations" : id === "virtual-try-on" ? "https://api.fashn.ai/v1/run" : "https://api.modelverse.cn/v1/tasks/submit"; return <article key={id} style={{"--accent":colors[index]} as React.CSSProperties}><div className="api-card-head"><span>{index === 0 ? "P" : `0${index}`}</span><b className={ready ? "connected" : "disconnected"}>{ready ? "● 已填写" : "○ 待配置"}</b></div><h3>{name}</h3><label className="api-field"><span>API 地址</span><input type="url" placeholder={placeholder} value={connections[id]?.url || ""} onChange={(event) => updateConnection(id, "url", event.target.value)}/></label><label className="api-field"><span>API Key</span><input type="password" placeholder="粘贴 API Key" value={connections[id]?.token || ""} onChange={(event) => updateConnection(id, "token", event.target.value)}/></label></article>})}</div>
@@ -225,6 +262,6 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
 }
 
 export default function TestPage() {
-  useEffect(() => { window.location.replace("/#workspace"); }, []);
+  useEffect(() => { window.location.replace("/studio"); }, []);
   return null;
 }

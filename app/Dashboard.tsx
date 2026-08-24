@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { TestWorkspace } from "./test/page";
 
 const services = [
   { no: "01", title: "商品净图", text: "智能识别商品主体，清理人物与复杂背景，输出平台通用的标准白底素材。", meta: "原始商品图 → 标准白底图" },
@@ -231,7 +230,7 @@ export default function Dashboard() {
     <header className="public-nav">
       <a className="lumera-logo" href="#top" aria-label="LUMERA 首页"><span>L</span><b>LUMERA</b><small>电商视觉工场</small></a>
       <nav className={menuOpen ? "open" : ""}><a href="#capabilities">解决方案</a><a href="#showcase">效果展示</a><a href="#video-gallery">视频灵感</a><a href="#studio">制作中心</a><a href="/admin">运营后台</a></nav>
-      <div className="nav-actions"><a className="nav-login" href="/admin">管理入口</a><a className="nav-cta" href="#studio">开始制作 <span>↗</span></a></div>
+      <div className="nav-actions"><a className="nav-login" href="/admin">管理入口</a><a className="nav-cta" href="/studio">开始制作 <span>↗</span></a></div>
       <button className="mobile-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label="切换菜单">{menuOpen ? "×" : "☰"}</button>
     </header>
     <BallpitBackdrop scrollRef={storefrontRef}/>
@@ -243,7 +242,7 @@ export default function Dashboard() {
         <span className="hero-tag"><i/> AI POWERED COMMERCE CONTENT</span>
         <h1>让每一件商品，<br/>拥有完整的<em>视觉表达。</em></h1>
         <p>从商品原图开始，依次完成商品净图、穿搭陈列、真人试穿和动态商拍。每一步都可检查、可重做、可下载。</p>
-        <div className="hero-actions"><a href="#studio" className="button-light">创建新项目 <span>→</span></a><a href="#showcase" className="button-line">查看制作流程</a></div>
+        <div className="hero-actions"><a href="/studio" className="button-light">创建新项目 <span>→</span></a><a href="#showcase" className="button-line">查看制作流程</a></div>
         <div className="trust-row"><span>适用于</span><b>服饰电商</b><b>品牌内容</b><b>社媒投放</b><b>商品上新</b></div>
       </div>
       <div className="hero-visual" aria-label="商品视觉生产流程示意">
@@ -278,8 +277,8 @@ export default function Dashboard() {
 
     <section id="studio" className="production-section">
       <SideRays side="left"/>
-      <header className="production-heading"><span className="section-label">CONTENT STUDIO</span><h2>开始创建商品视觉</h2><p>上传商品图，按照三个步骤逐项生成并确认结果。</p></header>
-      <TestWorkspace embedded />
+      <div className="studio-entry-copy"><span className="section-label">CONTENT STUDIO</span><h2>一个项目，<br/>五步完成商品内容。</h2><p>制作工作台已独立为清晰的纵向流程。每次只处理当前一步，检查满意后再继续，不再在一个页面里堆满所有设置。</p><ol><li><b>01</b>人物与造型</li><li><b>02</b>商品净图</li><li><b>03</b>穿搭陈列</li><li><b>04</b>真人试穿</li><li><b>05</b>动态视频</li></ol><a href="/studio">进入制作工作台 <span>↗</span></a></div>
+      <div className="studio-entry-visual"><div className="entry-orbit"/><div className="entry-stage active"><span>01</span><b>建立人物与造型</b><small>当前步骤</small></div><div className="entry-stage"><span>02</span><b>逐步生成并确认</b><small>结果可重做</small></div><div className="entry-stage"><span>03</span><b>完成视频交付</b><small>项目可追踪</small></div></div>
     </section>
 
     <footer className="public-footer footer-ballpit"><SideRays side="right"/><div className="footer-ballpit-copy"><span className="section-label">COMMERCE CONTENT, IN MOTION</span><a className="lumera-logo" href="#top"><span>L</span><b>LUMERA</b></a><h2>让商品内容生产，<br/>更快、更稳、<em>更一致。</em></h2><p>从第一张商品图，到每一次品牌表达。</p><div className="footer-actions"><a href="#studio">开始制作 <span>↗</span></a><a href="/admin">进入运营后台</a></div></div><small>© 2026 LUMERA Commerce Content Studio</small></footer>
