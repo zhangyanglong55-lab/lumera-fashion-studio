@@ -1,6 +1,6 @@
 import { runAgent, type AgentId } from "../../../../../lib/agent-runtime";
 
-const validAgents = new Set(["orchestrator", "product-white-bg", "hollow-look", "snap-change-video"]);
+const validAgents = new Set(["orchestrator", "product-white-bg", "hollow-look", "virtual-try-on", "snap-change-video"]);
 
 export async function POST(request: Request, context: { params: Promise<{ agentId: string }> }) {
   const { agentId } = await context.params;

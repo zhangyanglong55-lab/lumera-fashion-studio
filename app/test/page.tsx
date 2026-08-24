@@ -3,15 +3,16 @@
 import { useEffect, useState } from "react";
 
 type StageState = "waiting" | "running" | "done" | "failed";
-type StageMap = Record<"parent" | "white" | "hollow" | "video", StageState>;
+type StageMap = Record<"parent" | "white" | "hollow" | "tryon" | "video", StageState>;
 type Connection = { url?: string; token?: string };
-type AgentResult = { status?: string; output?: unknown; error?: string; taskId?: string; externalTaskId?: string };
+type AgentResult = { status?: string; output?: unknown; error?: string; taskId?: string; externalTaskId?: string; lookId?: string; category?: string };
 
 const requiredAgents = [
   ["orchestrator", "流程决策服务"], ["product-white-bg", "商品净图"],
-  ["hollow-look", "穿搭陈列"], ["snap-change-video", "动态商拍"],
+  ["hollow-look", "穿搭陈列"], ["virtual-try-on", "真人试穿"], ["snap-change-video", "动态商拍"],
 ] as const;
-const initialStages: StageMap = { parent: "waiting", white: "waiting", hollow: "waiting", video: "waiting" };
+const initialStages: StageMap = { parent: "waiting", white: "waiting", hollow: "waiting", tryon: "waiting", video: "waiting" };
+const garmentCategories = ["上衣", "外套", "下装", "连衣裙", "鞋履", "包袋", "帽子", "眼镜", "配饰"];
 
 const defaultVideoTemplates = [
   { id: "snap-loop", code: "A", name: "响指循环变装", description: "固定正面机位，右手响指触发丝滑换装，结尾回到开场造型。", preview: "/references/reference.mp4", prompt: "采用模板 A：固定正面中景，人物每次用右手打响指后触发连续布料重构，六次变装，结尾回到首套造型形成无缝循环。" },
@@ -40,7 +41,11 @@ function StageResults({ title, results, onPreview }: { title: string; results: A
 
 export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [files, setFiles] = useState<File[]>([]);
+  const [fileMeta, setFileMeta] = useState<Array<{ lookId: string; category: string }>>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [outfitCount, setOutfitCount] = useState(1);
+  const [personFile, setPersonFile] = useState<File>();
+  const [personPreview, setPersonPreview] = useState("");
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState("");
   const [retryLimit, setRetryLimit] = useState("2");
@@ -52,7 +57,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [connectionSaved, setConnectionSaved] = useState(false);
   const [parentTaskId, setParentTaskId] = useState<string>();
   const [previewImage, setPreviewImage] = useState<string>();
-  const [results, setResults] = useState<Record<string, AgentResult[]>>({ parent: [], white: [], hollow: [], video: [] });
+  const [results, setResults] = useState<Record<string, AgentResult[]>>({ parent: [], white: [], hollow: [], tryon: [], video: [] });
 
   useEffect(() => {
     const refreshConnections = () => {
@@ -77,6 +82,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
     const urls = files.map((file) => URL.createObjectURL(file)); setPreviews(urls);
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
   }, [files]);
+  useEffect(() => { if (!personFile) return setPersonPreview(""); const url = URL.createObjectURL(personFile); setPersonPreview(url); return () => URL.revokeObjectURL(url); }, [personFile]);
 
   async function asDataUrl(file: File) {
     const bitmap = await createImageBitmap(file);
@@ -94,7 +100,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
     const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("图片压缩失败")), "image/jpeg", .86));
     return await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
   }
-  function removeFile(index: number) { setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index)); }
+  function removeFile(index: number) { setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index)); setFileMeta((current) => current.filter((_, itemIndex) => itemIndex !== index)); }
   function setStage(stage: keyof StageMap, state: StageState) { setStages((current) => ({ ...current, [stage]: state })); }
   function updateConnection(id: string, field: "url" | "token", value: string) {
     setConnections((current) => ({ ...current, [id]: { ...current[id], [field]: value } }));
@@ -125,7 +131,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   }
 
   async function runWhiteStage() {
-    setMessage(""); setStages(initialStages); setResults({ parent: [], white: [], hollow: [], video: [] });
+    setMessage(""); setStages(initialStages); setResults({ parent: [], white: [], hollow: [], tryon: [], video: [] });
     setParentTaskId(undefined);
     const active = activeConnections();
     const missing = ["orchestrator", "product-white-bg"].filter((id) => !configured.includes(id) && !active[id]?.url).map((id) => requiredAgents.find(([agentId]) => agentId === id)?.[1]);
@@ -135,10 +141,11 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
     try {
       const images = await Promise.all(files.map(asDataUrl));
       setStage("parent", "running");
-      const plan = await callAgent("orchestrator", { phase: "plan", looks: images.map((_, index) => ({ id: `look-${index + 1}`, productImageCount: 1 })) }, active.orchestrator);
+      const looks = Array.from({length:outfitCount},(_,index)=>({id:`look-${index+1}`,productImageCount:fileMeta.filter(item=>item.lookId===`look-${index+1}`).length})).filter(item=>item.productImageCount>0);
+      const plan = await callAgent("orchestrator", { phase: "plan", looks, hasIdentityReference:Boolean(personFile) }, active.orchestrator);
       const taskId = plan.taskId; setParentTaskId(taskId); setResults((current) => ({ ...current, parent: [plan] })); setStage("parent", "done");
       activeStage = "white"; setStage("white", "running");
-      const white = await Promise.all(images.map((image, index) => callAgent("product-white-bg", { image, lookId: `look-${index + 1}`, productIndex: 0 }, active["product-white-bg"], taskId)));
+      const white = await Promise.all(images.map(async (image, index) => ({...(await callAgent("product-white-bg", { image, lookId: fileMeta[index]?.lookId || "look-1", category:fileMeta[index]?.category || "上衣", productIndex: index }, active["product-white-bg"], taskId)),lookId:fileMeta[index]?.lookId || "look-1",category:fileMeta[index]?.category || "上衣"})));
       setResults((current) => ({ ...current, white })); setStage("white", "done");
       setMessage("已完成第一步。请检查白底图，满意后点击“下一步：生成镂空图”。");
     } catch (error) { setStage(activeStage, "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
@@ -152,21 +159,34 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
     setMessage(""); setRunning(true); setStage("hollow", "running");
     try {
       const hollow: AgentResult[] = [];
-      for (let index = 0; index < results.white.length; index += 1) hollow.push(await callAgent("hollow-look", { lookId: `look-${index + 1}`, products: [results.white[index].output] }, active["hollow-look"], parentTaskId));
+      for (let index = 0; index < outfitCount; index += 1) { const lookId=`look-${index+1}`; const products=results.white.filter(item=>item.lookId===lookId).map(item=>({category:item.category,asset:item.output})); if(products.length) hollow.push({...await callAgent("hollow-look", { lookId, products }, active["hollow-look"], parentTaskId),lookId}); }
       setResults((current) => ({ ...current, hollow })); setStage("hollow", "done");
       setMessage("已完成第二步。请检查穿搭陈列图，满意后点击“下一步：生成动态视频”。");
     } catch (error) { setStage("hollow", "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setRunning(false); }
   }
 
+  async function runTryOnStage() {
+    if (stages.hollow !== "done" || !results.hollow.length) return setMessage("请先完成并确认穿搭陈列图。");
+    if (!personFile) return setMessage("请先上传一张正面全身人物基准图。");
+    const active = activeConnections();
+    if (!configured.includes("virtual-try-on") && !active["virtual-try-on"]?.url) return setMessage("第四步还缺少真人试穿服务，请管理员配置 FASHN 或兼容接口。");
+    setMessage(""); setRunning(true); setStage("tryon", "running");
+    try {
+      const personImage = await asDataUrl(personFile); const tryon:AgentResult[]=[];
+      for (const hollow of results.hollow) { let result=await callAgent("virtual-try-on",{personImage,outfitImage:hollow.output,lookId:hollow.lookId},active["virtual-try-on"],parentTaskId); if(result.status==="processing"&&result.externalTaskId){setMessage("真人试穿任务处理中，请稍候……"); for(let attempt=0;attempt<60&&result.status==="processing";attempt+=1){await new Promise(resolve=>setTimeout(resolve,3000)); result=await callAgent("virtual-try-on",{phase:"poll",taskId:result.externalTaskId},active["virtual-try-on"],parentTaskId);}} if(result.status==="processing") throw new Error("真人试穿等待超时，请稍后重试"); tryon.push({...result,lookId:hollow.lookId}); }
+      setResults(current=>({...current,tryon})); setStage("tryon","done"); setMessage("已完成真人试穿。请检查人物身份和服装，满意后再生成动态视频。");
+    } catch(error){setStage("tryon","failed");setMessage(error instanceof Error?error.message:String(error));} finally{setRunning(false);}
+  }
+
   async function runVideoStage() {
-    if (stages.hollow !== "done" || !results.hollow.length) return setMessage("请先完成并确认镂空图。");
+    if (stages.tryon !== "done" || !results.tryon.length) return setMessage("请先完成并确认真人试穿图。");
     const active = activeConnections();
     if (!configured.includes("snap-change-video") && !active["snap-change-video"]?.url) return setMessage("第三步还缺少动态商拍服务。");
     setMessage(""); setRunning(true); setStage("video", "running");
     try {
       const template = videoTemplates.find(item => item.id === selectedTemplate) || videoTemplates[0];
-      let video = await callAgent("snap-change-video", { looks: results.hollow.map((item) => item.output), videoTemplate: { id: template.id, name: template.name, prompt: template.prompt, referenceVideo: template.previewUrl || template.preview }, parameters: { duration: 10, aspectRatio: "9:16", fps: 30 } }, active["snap-change-video"], parentTaskId);
+      let video = await callAgent("snap-change-video", { looks: results.tryon.map((item) => item.output), videoTemplate: { id: template.id, name: template.name, prompt: template.prompt, referenceVideo: template.previewUrl || template.preview }, parameters: { duration: 10, aspectRatio: "9:16", fps: 30 } }, active["snap-change-video"], parentTaskId);
       if (video.status === "processing" && video.externalTaskId) {
         setMessage("视频任务已提交，正在等待星图生成，请勿关闭页面……");
         for (let attempt = 0; attempt < 60 && video.status === "processing"; attempt += 1) {
@@ -184,20 +204,23 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   const statusText = (state: StageState) => ({ waiting: "等待", running: "处理中", done: "✓ 通过", failed: "✕ 失败" })[state];
   return <div className={`test-shell ${embedded ? "embedded-test-shell" : ""}`}>{!embedded && <header className="test-head"><div><span className="kicker">UNIFIED WORKSPACE</span><h1>API 配置与流水线测试台</h1><p>在一个页面完成接口接入、素材上传、分阶段生成与结果验收。</p></div><a className="back" href="/">← 返回调度中心</a></header>}
     {!embedded && <section className="inline-api"><div className="inline-api-head"><div><span className="kicker">01 · API CONNECTIONS</span><h2>智能体接口接入</h2><p>配置保存在当前浏览器，保存后可直接在下方运行。</p></div><button className="primary" onClick={saveConnections}>{connectionSaved ? "已保存 ✓" : "保存全部 API"}</button></div>
-      <div className="api-grid compact-api-grid">{requiredAgents.map(([id, name], index) => { const colors = ["#ffcf58", "#ff8a4c", "#8a6cff", "#31c7a2"]; const ready = Boolean(connections[id]?.url); const placeholder = id === "orchestrator" ? "https://api.deepseek.com/chat/completions" : id === "product-white-bg" ? "https://api.remove.bg/v1.0/removebg" : id === "hollow-look" ? "https://api.modelverse.cn/v1/images/generations" : "https://api.modelverse.cn/v1/tasks/submit"; return <article key={id} style={{"--accent":colors[index]} as React.CSSProperties}><div className="api-card-head"><span>{index === 0 ? "P" : `0${index}`}</span><b className={ready ? "connected" : "disconnected"}>{ready ? "● 已填写" : "○ 待配置"}</b></div><h3>{name}</h3><label className="api-field"><span>API 地址</span><input type="url" placeholder={placeholder} value={connections[id]?.url || ""} onChange={(event) => updateConnection(id, "url", event.target.value)}/></label><label className="api-field"><span>API Key</span><input type="password" placeholder="粘贴 API Key" value={connections[id]?.token || ""} onChange={(event) => updateConnection(id, "token", event.target.value)}/></label></article>})}</div>
+      <div className="api-grid compact-api-grid">{requiredAgents.map(([id, name], index) => { const colors = ["#ffcf58", "#ff8a4c", "#8a6cff", "#d7ff44", "#31c7a2"]; const ready = Boolean(connections[id]?.url); const placeholder = id === "orchestrator" ? "https://api.deepseek.com/chat/completions" : id === "product-white-bg" ? "https://api.remove.bg/v1.0/removebg" : id === "hollow-look" ? "https://api.modelverse.cn/v1/images/generations" : id === "virtual-try-on" ? "https://api.fashn.ai/v1/run" : "https://api.modelverse.cn/v1/tasks/submit"; return <article key={id} style={{"--accent":colors[index]} as React.CSSProperties}><div className="api-card-head"><span>{index === 0 ? "P" : `0${index}`}</span><b className={ready ? "connected" : "disconnected"}>{ready ? "● 已填写" : "○ 待配置"}</b></div><h3>{name}</h3><label className="api-field"><span>API 地址</span><input type="url" placeholder={placeholder} value={connections[id]?.url || ""} onChange={(event) => updateConnection(id, "url", event.target.value)}/></label><label className="api-field"><span>API Key</span><input type="password" placeholder="粘贴 API Key" value={connections[id]?.token || ""} onChange={(event) => updateConnection(id, "token", event.target.value)}/></label></article>})}</div>
     </section>}
     <section className="tester staged-tester"><div className="test-panel task-creator"><span className="workspace-step">NEW PROJECT</span><h2>上传商品素材</h2>
-      <input id="product-images" className="file-input" type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event) => setFiles(Array.from(event.target.files || []))}/><label className="dropzone upload-zone" htmlFor="product-images"><span className="upload-icon">＋</span><b>点击上传商品图片</b><p>支持 JPG、PNG、WebP，可一次选择多张</p><span className="upload-action">选择图片</span></label>
-      {files.length > 0 && <div className="upload-list">{files.map((file, index) => <article key={`${file.name}-${file.lastModified}`}><img src={previews[index]} alt={file.name}/><div><b>{file.name}</b><small>{(file.size / 1024 / 1024).toFixed(2)} MB</small></div><button type="button" disabled={running} onClick={() => removeFile(index)} aria-label={`移除 ${file.name}`}>×</button></article>)}</div>}
+      <div className="outfit-builder-head"><div><b>造型分组</b><small>先确定造型套数，再为每件商品选择所属造型和商品类别。</small></div><div><button type="button" disabled={running||outfitCount<=1} onClick={()=>setOutfitCount(value=>Math.max(1,value-1))}>−</button><span>{outfitCount} 套</span><button type="button" disabled={running||outfitCount>=5} onClick={()=>setOutfitCount(value=>Math.min(5,value+1))}>＋</button></div></div>
+      <input id="product-images" className="file-input" type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event) => {const selected=Array.from(event.target.files || []);setFiles(selected);setFileMeta(selected.map((_,index)=>({lookId:`look-${Math.min(index+1,outfitCount)}`,category:"上衣"})));}}/><label className="dropzone upload-zone" htmlFor="product-images"><span className="upload-icon">＋</span><b>点击上传每套造型的商品图片</b><p>一套可包含上衣、下装、鞋、包和配饰</p><span className="upload-action">选择商品图片</span></label>
+      {files.length > 0 && <div className="upload-list grouped-upload-list">{files.map((file, index) => <article key={`${file.name}-${file.lastModified}`}><img src={previews[index]} alt={file.name}/><div><b>{file.name}</b><small>{(file.size / 1024 / 1024).toFixed(2)} MB</small><div className="asset-classifiers"><select value={fileMeta[index]?.lookId||"look-1"} onChange={event=>setFileMeta(current=>current.map((item,itemIndex)=>itemIndex===index?{...item,lookId:event.target.value}:item))}>{Array.from({length:outfitCount},(_,lookIndex)=><option key={lookIndex} value={`look-${lookIndex+1}`}>造型 {lookIndex+1}</option>)}</select><select value={fileMeta[index]?.category||"上衣"} onChange={event=>setFileMeta(current=>current.map((item,itemIndex)=>itemIndex===index?{...item,category:event.target.value}:item))}>{garmentCategories.map(category=><option key={category}>{category}</option>)}</select></div></div><button type="button" disabled={running} onClick={() => removeFile(index)} aria-label={`移除 ${file.name}`}>×</button></article>)}</div>}
+      <div className="identity-upload"><input id="identity-image" className="file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>setPersonFile(event.target.files?.[0])}/><label htmlFor="identity-image">{personPreview?<img src={personPreview} alt="人物基准预览"/>:<span>＋</span>}<div><b>{personFile?"人物基准图已选择":"上传人物基准图"}</b><small>建议正面全身、单人、双手双脚完整、背景简洁</small></div></label></div>
       <div className="connection-check"><b>生产服务状态</b><span>{configured.length}/4 已就绪</span>{configured.length < 4 && <a href="/admin">联系管理员配置 ↗</a>}</div>
-      <div className="formrow"><div className="field"><label>造型套数</label><input value={`${Math.max(files.length, 1)} 套`} readOnly/></div><div className="field"><label>失败重试</label><select value={retryLimit} disabled={running} onChange={(event) => setRetryLimit(event.target.value)}><option value="2">2 次</option><option value="1">1 次</option><option value="0">不重试</option></select></div></div>
+      <div className="formrow"><div className="field"><label>造型套数</label><input value={`${outfitCount} 套`} readOnly/></div><div className="field"><label>失败重试</label><select value={retryLimit} disabled={running} onChange={(event) => setRetryLimit(event.target.value)}><option value="2">2 次</option><option value="1">1 次</option><option value="0">不重试</option></select></div></div>
       <div className="template-picker"><header><div><span>VIDEO TEMPLATE</span><b>选择动态视频模板</b></div><small>已选择 {videoTemplates.find(item => item.id === selectedTemplate)?.code}</small></header><div className="template-grid">{videoTemplates.map(template => <button type="button" key={template.id} className={selectedTemplate === template.id ? "selected" : ""} onClick={() => setSelectedTemplate(template.id)} disabled={running}>{template.previewUrl || template.preview ? <video src={template.previewUrl || template.preview} muted playsInline loop autoPlay/> : <img src={template.cover || "/references/look-03.jpeg"} alt=""/>}<span className="template-code">{template.code}</span><div><b>{template.name}</b><p>{template.description}</p></div><i>{selectedTemplate === template.id ? "✓" : ""}</i></button>)}</div></div>
-      <div className="manual-stage-actions"><button className="primary full" onClick={runWhiteStage} disabled={running}>{stages.white === "done" ? "重新生成商品净图" : "第一步 · 生成商品净图"}</button><button className="primary full" onClick={runHollowStage} disabled={running || stages.white !== "done"}>{stages.hollow === "done" ? "重新生成穿搭陈列" : "下一步 · 生成穿搭陈列"}</button><button className="primary full" onClick={runVideoStage} disabled={running || stages.hollow !== "done"}>{stages.video === "done" ? "重新生成动态视频" : "下一步 · 生成动态商拍"}</button></div>{message && <div className={`test-message ${message.startsWith("已完成") ? "success" : "error"}`}>{message}</div>}
+      <div className="manual-stage-actions"><button className="primary full" onClick={runWhiteStage} disabled={running}>{stages.white === "done" ? "重新生成商品净图" : "第一步 · 生成商品净图"}</button><button className="primary full" onClick={runHollowStage} disabled={running || stages.white !== "done"}>{stages.hollow === "done" ? "重新生成穿搭陈列" : "下一步 · 生成穿搭陈列"}</button><button className="primary full" onClick={runTryOnStage} disabled={running || stages.hollow !== "done"}>{stages.tryon === "done" ? "重新生成真人试穿" : "下一步 · 生成真人试穿"}</button><button className="primary full" onClick={runVideoStage} disabled={running || stages.tryon !== "done"}>{stages.video === "done" ? "重新生成动态视频" : "下一步 · 生成动态商拍"}</button></div>{message && <div className={`test-message ${message.startsWith("已完成") ? "success" : "error"}`}>{message}</div>}
     </div><div className="test-panel result-workspace"><span className="workspace-step">PROJECT OUTPUT</span><h2>素材生成进度</h2><div className="tree">
       <div className={`tree-node parent ${stages.parent}`}><span className="num">◆</span><div><b>项目准备</b><small>素材检查与生成计划</small></div><span>{statusText(stages.parent)}</span></div><div className="tree-line"/>
       <div className={`tree-node ${stages.white}`}><span className="num">01</span><div><b>商品净图</b><small>完成后展示标准白底商品图</small></div><span>{statusText(stages.white)}</span></div><StageResults title="商品净图结果" results={results.white} onPreview={setPreviewImage}/><div className="tree-line"/>
       <div className={`tree-node ${stages.hollow}`}><span className="num">02</span><div><b>穿搭陈列</b><small>展示完整隐形人台穿搭结果</small></div><span>{statusText(stages.hollow)}</span></div><StageResults title="穿搭陈列结果" results={results.hollow} onPreview={setPreviewImage}/><div className="tree-line"/>
-      <div className={`tree-node ${stages.video}`}><span className="num">03</span><div><b>动态商拍</b><small>展示最终 10 秒竖版视频</small></div><span>{statusText(stages.video)}</span></div><StageResults title="动态商拍视频" results={results.video} onPreview={setPreviewImage}/>
+      <div className={`tree-node ${stages.tryon}`}><span className="num">03</span><div><b>真人试穿</b><small>固定人物身份并展示每套完整造型</small></div><span>{statusText(stages.tryon)}</span></div><StageResults title="真人试穿结果" results={results.tryon} onPreview={setPreviewImage}/><div className="tree-line"/>
+      <div className={`tree-node ${stages.video}`}><span className="num">04</span><div><b>动态商拍</b><small>展示最终 10 秒竖版视频</small></div><span>{statusText(stages.video)}</span></div><StageResults title="动态商拍视频" results={results.video} onPreview={setPreviewImage}/>
     </div></div></section>{previewImage && <div className="image-lightbox" role="dialog" aria-modal="true" aria-label="图片细节预览" onClick={() => setPreviewImage(undefined)}><button type="button" onClick={() => setPreviewImage(undefined)} aria-label="关闭预览">×</button><img src={previewImage} alt="放大后的生成结果" onClick={(event) => event.stopPropagation()}/></div>}</div>;
 }
 

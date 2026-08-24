@@ -6,7 +6,8 @@ import { TestWorkspace } from "./test/page";
 const services = [
   { no: "01", title: "商品净图", text: "智能识别商品主体，清理人物与复杂背景，输出平台通用的标准白底素材。", meta: "原始商品图 → 标准白底图" },
   { no: "02", title: "穿搭陈列", text: "将多件商品组合成完整造型，生成具有真实体积、层次与材质的隐形人台陈列图。", meta: "白底单品 → 完整穿搭造型" },
-  { no: "03", title: "动态商拍", text: "保持人物与服装一致性，通过自然响指动作完成连续变装，生成社媒短视频。", meta: "多套造型 → 10 秒竖版视频" },
+  { no: "03", title: "真人试穿", text: "以固定人物基准图承接每套造型，先生成同一人物的完整试穿效果。", meta: "穿搭造型 + 人物基准 → 真人试穿" },
+  { no: "04", title: "动态商拍", text: "使用已确认的真人试穿图，通过自然响指动作完成连续变装，生成社媒短视频。", meta: "同人物多套试穿 → 10 秒竖版视频" },
 ];
 type PromptVideo = { id: string; title: string; category: string; description: string; prompt: string; videoUrl?: string; posterUrl?: string; enabled: boolean; sortOrder: number };
 const slideNames = ["品牌首页", "内容流程", "效果展示", "视频灵感", "制作中心", "关于我们"];
@@ -241,7 +242,7 @@ export default function Dashboard() {
       <div className="commerce-hero-copy">
         <span className="hero-tag"><i/> AI POWERED COMMERCE CONTENT</span>
         <h1>让每一件商品，<br/>拥有完整的<em>视觉表达。</em></h1>
-        <p>从一张商品原图开始，连续完成商品净图、穿搭陈列和动态商拍。每一步都可检查、可重做、可下载。</p>
+        <p>从商品原图开始，依次完成商品净图、穿搭陈列、真人试穿和动态商拍。每一步都可检查、可重做、可下载。</p>
         <div className="hero-actions"><a href="#studio" className="button-light">创建新项目 <span>→</span></a><a href="#showcase" className="button-line">查看制作流程</a></div>
         <div className="trust-row"><span>适用于</span><b>服饰电商</b><b>品牌内容</b><b>社媒投放</b><b>商品上新</b></div>
       </div>
@@ -257,7 +258,7 @@ export default function Dashboard() {
     <section id="capabilities" className="capabilities-block">
       <SideRays side="left"/>
       <header><div><span className="section-label">PRODUCTION FLOW</span><h2>一条真正可控的<br/>电商内容生产线</h2></div><p>不是一次性黑盒生成。每完成一个环节，先检查结果；确认满意后，再进入下一步。</p></header>
-      <div className="service-grid">{services.map((item) => <article key={item.no}><div className="service-number">{item.no}</div><div className="service-icon">{item.no === "01" ? "◐" : item.no === "02" ? "◇" : "▶"}</div><h3>{item.title}</h3><p>{item.text}</p><footer>{item.meta}<span>↗</span></footer></article>)}</div>
+      <div className="service-grid">{services.map((item) => <article key={item.no}><div className="service-number">{item.no}</div><div className="service-icon">{item.no === "01" ? "◐" : item.no === "02" ? "◇" : item.no === "03" ? "◎" : "▶"}</div><h3>{item.title}</h3><p>{item.text}</p><footer>{item.meta}<span>↗</span></footer></article>)}</div>
     </section>
 
     <section id="showcase" className="showcase-block">

@@ -14,6 +14,7 @@ export async function POST(request: Request) {
   };
 
   if (!body?.looks?.length) return Response.json({ error: "至少需要一套 looks，且每套包含 productImages" }, { status: 400 });
+  if (!body.identityReference) return Response.json({ error: "缺少人物基准图 identityReference" }, { status: 400 });
 
   const parentTaskId = `fashion_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
   const children: AgentRunResult[] = [];
@@ -60,10 +61,24 @@ export async function POST(request: Request) {
     if (result.status !== "succeeded") return Response.json({ parentTaskId, status: "failed", stage: 2, children }, { status: 502 });
   }
 
+  const tryOnResults: AgentRunResult[] = [];
+  for (let index = 0; index < hollowResults.length; index += 1) {
+    const result = await runAgent("virtual-try-on", {
+      parentTaskId,
+      input: { lookId: body.looks[index].id || `look-${index + 1}`, personImage: body.identityReference, outfitImage: hollowResults[index].output },
+      prompt: body.prompts?.["virtual-try-on"],
+      parameters: body.parameters?.["virtual-try-on"],
+      connection: body.connections?.["virtual-try-on"],
+    }, retryLimit);
+    tryOnResults.push(result);
+    children.push(result);
+    if (result.status !== "succeeded") return Response.json({ parentTaskId, status: result.status, stage: 3, children }, { status: result.status === "failed" ? 502 : 202 });
+  }
+
   const videoResult = await runAgent("snap-change-video", {
     parentTaskId,
     input: {
-      looks: hollowResults.map((item) => item.output),
+      looks: tryOnResults.map((item) => item.output),
       identityReference: body.identityReference,
       motionReference: body.motionReference,
     },
@@ -82,13 +97,13 @@ export async function POST(request: Request) {
       metadata: { role: "parent", phase: "final-review" },
     }, retryLimit);
     children.push(reviewResult);
-    if (reviewResult.status !== "succeeded") return Response.json({ parentTaskId, status: "failed", stage: 4, output: videoResult.output, children }, { status: 502 });
+    if (reviewResult.status !== "succeeded") return Response.json({ parentTaskId, status: "failed", stage: 5, output: videoResult.output, children }, { status: 502 });
   }
 
   return Response.json({
     parentTaskId,
     status: videoResult.status,
-    stage: 3,
+    stage: 4,
     output: videoResult.output,
     children,
   }, { status: videoResult.status === "failed" ? 502 : 200 });
