@@ -8,7 +8,7 @@ const services = [
   { no: "03", title: "换装视频生成", text: "基于已生成的穿搭图，用自然响指动作丝滑换装，一键生成 10 秒竖版短视频。", meta: "多套穿搭 → 换装视频", icon: "🎬" },
 ];
 type PromptVideo = { id: string; title: string; category: string; description: string; prompt: string; videoUrl?: string; posterUrl?: string; enabled: boolean; sortOrder: number };
-const slideNames = ["品牌首页", "内容流程", "效果展示", "视频灵感", "制作中心", "关于我们"];
+const slideNames = ["品牌首页", "内容流程", "效果展示", "视频灵感", "制作中心"];
 function SideRays({ side = "left" }: { side?: "left" | "right" }) {
   return <div className={`side-rays side-rays-${side}`} aria-hidden="true">
     {Array.from({ length: 8 }, (_, index) => <i key={index} style={{
@@ -280,7 +280,6 @@ export default function Dashboard() {
       <div className="studio-entry-visual"><div className="entry-orbit"/><div className="entry-stage active"><span>01</span><b>建立人物与造型</b><small>当前步骤</small></div><div className="entry-stage"><span>02</span><b>逐步生成并确认</b><small>结果可重做</small></div><div className="entry-stage"><span>03</span><b>完成视频交付</b><small>项目可追踪</small></div></div>
     </section>
 
-    <footer className="public-footer footer-ballpit"><SideRays side="right"/><div className="footer-ballpit-copy"><span className="section-label">COMMERCE CONTENT, IN MOTION</span><a className="lumera-logo" href="#top"><span>L</span><b>LUMERA</b></a><h2>让商品内容生产，<br/>更快、更稳、<em>更一致。</em></h2><p>从第一张商品图，到每一次品牌表达。</p><div className="footer-actions"><a href="#studio">开始制作 <span>↗</span></a><a href="/admin">进入运营后台</a></div></div><small>© 2026 LUMERA Commerce Content Studio</small></footer>
     {selectedPrompt && <div className="prompt-dialog-backdrop" role="presentation" onClick={() => setSelectedPrompt(null)}><section className="prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="prompt-dialog-title" onClick={event => event.stopPropagation()}><header><span>{selectedPrompt.category}</span><button onClick={() => setSelectedPrompt(null)} aria-label="关闭提示词">×</button></header><h2 id="prompt-dialog-title">{selectedPrompt.title}</h2><p>{selectedPrompt.description}</p><div className="prompt-dialog-content">{selectedPrompt.prompt}</div><footer><span>{selectedPrompt.prompt.length} 字符 · 完整提示词</span><button onClick={() => copyPrompt(selectedPrompt)}>{copiedPrompt === selectedPrompt.id ? "已复制完整提示词 ✓" : "复制全部提示词"}</button></footer></section></div>}
     <aside className="horizontal-guide" aria-label="横向页面导航"><button onClick={() => goToSlide(currentSlide - 1)} disabled={currentSlide === 0} aria-label="上一页">←</button><div className="guide-status"><span>{String(currentSlide + 1).padStart(2,"0")} / {String(slideNames.length).padStart(2,"0")}</span><b>{slideNames[currentSlide]}</b><small>左右滑动浏览</small></div><div className="guide-dots">{slideNames.map((name,index) => <button key={name} className={index === currentSlide ? "active" : ""} onClick={() => goToSlide(index)} aria-label={`前往${name}`}/>)}</div><button onClick={() => goToSlide(currentSlide + 1)} disabled={currentSlide === slideNames.length - 1} aria-label="下一页">→</button></aside>
   </main>;
