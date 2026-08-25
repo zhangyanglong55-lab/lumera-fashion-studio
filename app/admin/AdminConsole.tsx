@@ -10,7 +10,6 @@ const systems = [
   { id: "orchestrator", code: "CORE", name: "流程决策服务", desc: "负责项目规划、结果校验和失败重试", color: "#d5ff45", placeholder: "https://api.deepseek.com/chat/completions", model: "deepseek-v4-pro" },
   { id: "product-white-bg", code: "IMG-01", name: "商品净图服务", desc: "负责主体识别、背景清理和标准化输出", color: "#78a7ff", placeholder: "https://api.remove.bg/v1.0/removebg" },
   { id: "hollow-look", code: "IMG-02", name: "真人穿搭服务", desc: "保持人物身份，把白底商品组合穿到指定人物身上", color: "#c792ff", placeholder: "https://api.modelverse.cn/v1/images/generations", model: "Qwen/Qwen-Image-Edit" },
-  { id: "virtual-try-on", code: "IMG-03", name: "真人试穿服务", desc: "负责固定人物身份并将完整造型穿到人物身上", color: "#d5ff45", placeholder: "https://api.fashn.ai/v1/run" },
   { id: "snap-change-video", code: "VID-01", name: "动态商拍服务", desc: "负责人物一致性、动作和变装视频生成", color: "#51ddb5", placeholder: "https://api.modelverse.cn/v1/tasks/submit", model: "MiniMax-Hailuo-2.3" },
 ];
 

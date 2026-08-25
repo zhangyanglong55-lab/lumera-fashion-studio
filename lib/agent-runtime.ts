@@ -1,6 +1,6 @@
 import { agents, orchestrator } from "./agents";
 
-export type AgentId = "orchestrator" | "product-white-bg" | "hollow-look" | "virtual-try-on" | "snap-change-video";
+export type AgentId = "orchestrator" | "product-white-bg" | "hollow-look" | "snap-change-video";
 
 export type AgentRunRequest = {
   taskId?: string;
@@ -35,10 +35,6 @@ const config: Record<AgentId, { url?: string; token?: string }> = {
   "hollow-look": {
     url: process.env.HOLLOW_LOOK_AGENT_URL,
     token: process.env.HOLLOW_LOOK_AGENT_TOKEN,
-  },
-  "virtual-try-on": {
-    url: process.env.TRY_ON_AGENT_URL,
-    token: process.env.TRY_ON_AGENT_TOKEN,
   },
   "snap-change-video": {
     url: process.env.SNAP_VIDEO_AGENT_URL,
@@ -78,7 +74,6 @@ function isArk(url: string) {
   const host = new URL(url).hostname;
   return host.endsWith("volces.com") || host.endsWith("volcengine.com");
 }
-function isFashn(url: string) { return new URL(url).hostname.endsWith("fashn.ai"); }
 
 function findImage(value: unknown): string | undefined {
   if (typeof value === "string" && (/^data:image\//.test(value) || /^https?:\/\//.test(value))) return value;
@@ -166,21 +161,6 @@ async function postAgent(agentId: AgentId, target: { url: string; token?: string
     });
   }
 
-  if (agentId === "virtual-try-on" && isFashn(target.url)) {
-    const input = request.input as { phase?: string; taskId?: string; personImage?: unknown; outfitImage?: unknown };
-    if (input.phase === "poll" && input.taskId) {
-      return fetch(`https://api.fashn.ai/v1/status/${encodeURIComponent(input.taskId)}`, { headers: target.token ? { Authorization: `Bearer ${target.token}` } : {} });
-    }
-    const modelImage = findImage(input.personImage);
-    const productImage = findImage(input.outfitImage);
-    if (!modelImage || !productImage) throw new Error("真人试穿接口需要人物基准图和穿搭陈列图");
-    return fetch("https://api.fashn.ai/v1/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...(target.token ? { Authorization: `Bearer ${target.token}` } : {}) },
-      body: JSON.stringify({ model_name: "tryon-max", inputs: { model_image: modelImage, product_image: productImage, prompt, output_format: "png", return_base64: true, generation_mode: "balanced", resolution: "2k" } }),
-    });
-  }
-
   if (agentId === "snap-change-video" && (isModelVerse(target.url) || isArk(target.url))) {
     const input = request.input as { phase?: string; taskId?: string; videoTemplate?: { prompt?: string; referenceVideo?: string } };
     const authorization = target.token || "";
@@ -253,10 +233,6 @@ export async function runAgent(agentId: AgentId, request: AgentRunRequest, retry
       const modelVerseImages = (isModelVerse(target.url) || isArk(target.url)) && Array.isArray(body.data)
         ? body.data.map((item: Record<string, unknown>) => typeof item.b64_json === "string" ? (item.b64_json.startsWith("data:") ? item.b64_json : `data:image/png;base64,${item.b64_json}`) : item.url).filter(Boolean)
         : undefined;
-      const fashnTask = agentId === "virtual-try-on" && isFashn(target.url) ? body : undefined;
-      if (fashnTask?.status === "failed") throw new Error(readableError(fashnTask.error || "真人试穿生成失败"));
-      const fashnStatus = fashnTask?.id && !fashnTask?.output ? "processing" : fashnTask?.status === "completed" ? "succeeded" : undefined;
-      const fashnOutput = fashnTask?.output ? { images: Array.isArray(fashnTask.output) ? fashnTask.output.map((item: string) => item.startsWith("data:") ? item : (/^[A-Za-z0-9+/=]+$/.test(item) ? `data:image/png;base64,${item}` : item)) : fashnTask.output } : undefined;
       const videoTask = agentId === "snap-change-video" && (isModelVerse(target.url) || isArk(target.url)) ? body.output : undefined;
       if (videoTask?.task_status === "Failure") throw new Error(videoTask.error_message || "星图视频任务生成失败");
       const videoStatus = videoTask?.task_status === "Pending" || videoTask?.task_status === "Running" || (videoTask?.task_id && !videoTask?.task_status) ? "processing" : videoTask?.task_status === "Success" ? "succeeded" : undefined;
@@ -265,9 +241,9 @@ export async function runAgent(agentId: AgentId, request: AgentRunRequest, retry
       return {
         taskId,
         agentId,
-        status: videoStatus || fashnStatus || body.status || "succeeded",
-        output: videoOutput ?? fashnOutput ?? deepSeekOutput ?? (modelVerseImages?.length ? { images: modelVerseImages } : undefined) ?? body.output ?? body.data ?? body,
-        externalTaskId: videoTask?.task_id || fashnTask?.id || body.task_id || body.external_task_id,
+        status: videoStatus || body.status || "succeeded",
+        output: videoOutput ?? deepSeekOutput ?? (modelVerseImages?.length ? { images: modelVerseImages } : undefined) ?? body.output ?? body.data ?? body,
+        externalTaskId: videoTask?.task_id || body.task_id || body.external_task_id,
         durationMs: Date.now() - started,
         attempts: attempt,
       };
