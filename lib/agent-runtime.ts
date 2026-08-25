@@ -86,6 +86,17 @@ function findImage(value: unknown): string | undefined {
   if (value && typeof value === "object") for (const item of Object.values(value as Record<string, unknown>)) { const found = findImage(item); if (found) return found; }
 }
 
+function collectImages(value: unknown, found: string[] = []): string[] {
+  if (typeof value === "string" && (/^data:image\//.test(value) || /^https?:\/\//.test(value))) {
+    if (!found.includes(value)) found.push(value);
+  } else if (Array.isArray(value)) {
+    for (const item of value) collectImages(item, found);
+  } else if (value && typeof value === "object") {
+    for (const item of Object.values(value as Record<string, unknown>)) collectImages(item, found);
+  }
+  return found;
+}
+
 
 function parseJsonContent(value: unknown) {
   if (typeof value !== "string") return value;
@@ -127,9 +138,21 @@ async function postAgent(agentId: AgentId, target: { url: string; token?: string
   }
 
   if (agentId === "hollow-look" && (isModelVerse(target.url) || isArk(target.url))) {
-    const input = request.input as { image?: unknown };
-    const image = typeof input.image === "string" ? input.image : findImage(request.input);
-    if (!image) throw new Error("真人穿搭接口没有收到有效的商品拼图");
+    const input = request.input as { image?: unknown; identityReference?: unknown; products?: unknown };
+    let images: string[] = [];
+    if (typeof input.image === "string") {
+      images = [input.image];
+    } else {
+      const person = findImage(input.identityReference);
+      if (person) images.push(person);
+      images.push(...collectImages(input.products));
+      if (!images.length) {
+        const fallback = findImage(request.input);
+        if (fallback) images.push(fallback);
+      }
+    }
+    if (!images.length) throw new Error("真人穿搭接口没有收到有效图片");
+    const image = images.length === 1 ? images[0] : images;
     return fetch(target.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(target.token ? { Authorization: `Bearer ${target.token}` } : {}) },

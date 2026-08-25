@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     cursor += count;
     const result = await runAgent("hollow-look", {
       parentTaskId,
-      input: { lookId: look.id || `look-${index + 1}`, products, notes: look.notes },
+      input: { lookId: look.id || `look-${index + 1}`, identityReference: body.identityReference, products, notes: look.notes },
       prompt: body.prompts?.["hollow-look"],
       parameters: body.parameters?.["hollow-look"],
       connection: body.connections?.["hollow-look"],
@@ -61,24 +61,10 @@ export async function POST(request: Request) {
     if (result.status !== "succeeded") return Response.json({ parentTaskId, status: "failed", stage: 2, children }, { status: 502 });
   }
 
-  const tryOnResults: AgentRunResult[] = [];
-  for (let index = 0; index < hollowResults.length; index += 1) {
-    const result = await runAgent("virtual-try-on", {
-      parentTaskId,
-      input: { lookId: body.looks[index].id || `look-${index + 1}`, personImage: body.identityReference, outfitImage: hollowResults[index].output },
-      prompt: body.prompts?.["virtual-try-on"],
-      parameters: body.parameters?.["virtual-try-on"],
-      connection: body.connections?.["virtual-try-on"],
-    }, retryLimit);
-    tryOnResults.push(result);
-    children.push(result);
-    if (result.status !== "succeeded") return Response.json({ parentTaskId, status: result.status, stage: 3, children }, { status: result.status === "failed" ? 502 : 202 });
-  }
-
   const videoResult = await runAgent("snap-change-video", {
     parentTaskId,
     input: {
-      looks: tryOnResults.map((item) => item.output),
+      looks: hollowResults.map((item) => item.output),
       identityReference: body.identityReference,
       motionReference: body.motionReference,
     },
