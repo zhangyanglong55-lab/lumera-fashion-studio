@@ -7,6 +7,7 @@ async function ensureTable() {
   await bindings.DB.prepare(`CREATE TABLE IF NOT EXISTS prompt_videos (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
+    code TEXT NOT NULL DEFAULT '',
     category TEXT NOT NULL,
     description TEXT NOT NULL,
     prompt TEXT NOT NULL,
@@ -20,6 +21,11 @@ async function ensureTable() {
     updated_at TEXT NOT NULL
   )`).run();
   await bindings.DB.prepare("CREATE INDEX IF NOT EXISTS idx_prompt_videos_enabled_sort ON prompt_videos(enabled, sort_order)").run();
+  try {
+    await bindings.DB.prepare("ALTER TABLE prompt_videos ADD COLUMN code TEXT NOT NULL DEFAULT ''").run();
+  } catch {
+    // 列已存在
+  }
 }
 
 function present(row: Record<string, unknown>) {
@@ -70,6 +76,7 @@ export async function POST(request: Request) {
   const values = {
     id,
     title: String(form.get("title") || "未命名视频"),
+    code: String(form.get("code") || ""),
     category: String(form.get("category") || "视频灵感"),
     description: String(form.get("description") || ""),
     prompt: String(form.get("prompt") || ""),
@@ -78,9 +85,9 @@ export async function POST(request: Request) {
     sortOrder: Number(form.get("sortOrder") || 99),
     createdAt: String(existing?.created_at || now), updatedAt: now,
   };
-  await bindings.DB.prepare(`INSERT INTO prompt_videos (id,title,category,description,prompt,video_url,video_key,poster_url,poster_key,enabled,sort_order,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,category=excluded.category,description=excluded.description,prompt=excluded.prompt,video_url=excluded.video_url,video_key=excluded.video_key,poster_url=excluded.poster_url,poster_key=excluded.poster_key,enabled=excluded.enabled,sort_order=excluded.sort_order,updated_at=excluded.updated_at`)
-    .bind(values.id, values.title, values.category, values.description, values.prompt, values.videoUrl, values.videoKey, values.posterUrl, values.posterKey, values.enabled, values.sortOrder, values.createdAt, values.updatedAt).run();
+  await bindings.DB.prepare(`INSERT INTO prompt_videos (id,title,code,category,description,prompt,video_url,video_key,poster_url,poster_key,enabled,sort_order,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,code=excluded.code,category=excluded.category,description=excluded.description,prompt=excluded.prompt,video_url=excluded.video_url,video_key=excluded.video_key,poster_url=excluded.poster_url,poster_key=excluded.poster_key,enabled=excluded.enabled,sort_order=excluded.sort_order,updated_at=excluded.updated_at`)
+    .bind(values.id, values.title, values.code, values.category, values.description, values.prompt, values.videoUrl, values.videoKey, values.posterUrl, values.posterKey, values.enabled, values.sortOrder, values.createdAt, values.updatedAt).run();
   return Response.json({ video: { ...values, enabled: Boolean(values.enabled) } });
 }
 

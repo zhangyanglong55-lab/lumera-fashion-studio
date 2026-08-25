@@ -9,7 +9,7 @@ export type AgentRunRequest = {
   prompt?: string;
   parameters?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
-  connection?: { url?: string; token?: string };
+  connection?: { url?: string; token?: string; model?: string };
 };
 
 export type AgentRunResult = {
@@ -74,6 +74,10 @@ function isModelVerse(url: string) {
   const host = new URL(url).hostname;
   return host.endsWith("modelverse.cn") || host.endsWith("umodelverse.ai");
 }
+function isArk(url: string) {
+  const host = new URL(url).hostname;
+  return host.endsWith("volces.com") || host.endsWith("volcengine.com");
+}
 function isFashn(url: string) { return new URL(url).hostname.endsWith("fashn.ai"); }
 
 function findImage(value: unknown): string | undefined {
@@ -82,19 +86,21 @@ function findImage(value: unknown): string | undefined {
   if (value && typeof value === "object") for (const item of Object.values(value as Record<string, unknown>)) { const found = findImage(item); if (found) return found; }
 }
 
+
 function parseJsonContent(value: unknown) {
   if (typeof value !== "string") return value;
   const cleaned = value.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try { return JSON.parse(cleaned); } catch { return value; }
 }
 
-async function postAgent(agentId: AgentId, target: { url: string; token?: string }, request: AgentRunRequest, taskId: string, prompt: string) {
+async function postAgent(agentId: AgentId, target: { url: string; token?: string; model?: string }, request: AgentRunRequest, taskId: string, prompt: string) {
+  console.log(`[SnapFlow] ${agentId} -> ${target.url}${target.model ? ` (model=${target.model})` : " (无model)"} ${target.token ? "(带Key)" : "(无Key)"}`);
   if (agentId === "orchestrator" && isDeepSeek(target.url)) {
     return fetch(target.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(target.token ? { Authorization: `Bearer ${target.token}` } : {}) },
       body: JSON.stringify({
-        model: "deepseek-v4-pro",
+        model: target.model || "deepseek-v4-pro",
         messages: [
           { role: "system", content: prompt },
           { role: "user", content: `请根据以下父任务数据完成规划或验收，并用简洁 JSON 输出：\n${JSON.stringify(request.input)}` },
@@ -120,17 +126,18 @@ async function postAgent(agentId: AgentId, target: { url: string; token?: string
     return fetch("https://api.remove.bg/v1.0/removebg", { method: "POST", headers: target.token ? { "X-Api-Key": target.token } : {}, body: form });
   }
 
-  if (agentId === "hollow-look" && isModelVerse(target.url)) {
-    const image = findImage(request.input);
-    if (!image) throw new Error("星图图片编辑接口没有收到有效的白底图");
-    return fetch("https://api.modelverse.cn/v1/images/generations", {
+  if (agentId === "hollow-look" && (isModelVerse(target.url) || isArk(target.url))) {
+    const input = request.input as { image?: unknown };
+    const image = typeof input.image === "string" ? input.image : findImage(request.input);
+    if (!image) throw new Error("真人穿搭接口没有收到有效的商品拼图");
+    return fetch(target.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(target.token ? { Authorization: `Bearer ${target.token}` } : {}) },
       body: JSON.stringify({
-        model: "Qwen/Qwen-Image-Edit",
+        model: target.model || "Qwen/Qwen-Image-Edit",
         prompt,
         image,
-        size: "1024x1536",
+        size: isArk(target.url) ? "1440x2560" : "1080x1920",
         response_format: "b64_json",
       }),
     });
@@ -151,20 +158,21 @@ async function postAgent(agentId: AgentId, target: { url: string; token?: string
     });
   }
 
-  if (agentId === "snap-change-video" && isModelVerse(target.url)) {
+  if (agentId === "snap-change-video" && (isModelVerse(target.url) || isArk(target.url))) {
     const input = request.input as { phase?: string; taskId?: string; videoTemplate?: { prompt?: string; referenceVideo?: string } };
     const authorization = target.token || "";
     if (input.phase === "poll" && input.taskId) {
-      return fetch(`https://api.modelverse.cn/v1/tasks/status?task_id=${encodeURIComponent(input.taskId)}`, { headers: { Authorization: authorization } });
+      const statusUrl = target.url.replace(/\/submit\/?$/, "/status");
+      return fetch(`${statusUrl}?task_id=${encodeURIComponent(input.taskId)}`, { headers: { Authorization: authorization } });
     }
     const firstFrame = findImage(request.input);
-    if (!firstFrame) throw new Error("星图视频接口没有收到有效的镂空穿搭首帧图");
+    if (!firstFrame) throw new Error("星图视频接口没有收到有效的真人穿搭首帧图");
     const templatePrompt = input.videoTemplate?.prompt ? `\n\n视频模板要求：${input.videoTemplate.prompt}` : "";
-    return fetch("https://api.modelverse.cn/v1/tasks/submit", {
+    return fetch(target.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: authorization },
       body: JSON.stringify({
-        model: "MiniMax-Hailuo-2.3",
+        model: target.model || "MiniMax-Hailuo-2.3",
         input: { first_frame_image: firstFrame, prompt: `${prompt}${templatePrompt}`, reference_video: input.videoTemplate?.referenceVideo },
         parameters: { duration: 10, resolution: "768P", prompt_optimizer: true, fast_pretreatment: false, aigc_watermark: false },
       }),
@@ -180,7 +188,11 @@ async function postAgent(agentId: AgentId, target: { url: string; token?: string
 
 export async function runAgent(agentId: AgentId, request: AgentRunRequest, retryLimit = 2): Promise<AgentRunResult> {
   const started = Date.now();
-  const target = request.connection?.url ? request.connection : config[agentId];
+  const target = {
+    url: request.connection?.url || config[agentId]?.url,
+    token: request.connection?.token || config[agentId]?.token,
+    model: request.connection?.model,
+  };
   const taskId = request.taskId || createTaskId(agentId);
   const agent = agentId === "orchestrator" ? orchestrator : agents.find((item) => item.id === agentId);
 
@@ -198,7 +210,7 @@ export async function runAgent(agentId: AgentId, request: AgentRunRequest, retry
   let lastError = "未知错误";
   for (let attempt = 1; attempt <= retryLimit + 1; attempt += 1) {
     try {
-      const response = await postAgent(agentId, target as { url: string; token?: string }, request, taskId, request.prompt || agent.prompt);
+      const response = await postAgent(agentId, target as { url: string; token?: string; model?: string }, request, taskId, request.prompt || agent.prompt);
       const contentType = response.headers.get("content-type") || "";
       if (response.ok && contentType.startsWith("image/")) {
         const data = Buffer.from(await response.arrayBuffer()).toString("base64");
@@ -215,14 +227,14 @@ export async function runAgent(agentId: AgentId, request: AgentRunRequest, retry
       }
 
       const deepSeekOutput = isDeepSeek(target.url) ? parseJsonContent(body.choices?.[0]?.message?.content) : undefined;
-      const modelVerseImages = isModelVerse(target.url) && Array.isArray(body.data)
+      const modelVerseImages = (isModelVerse(target.url) || isArk(target.url)) && Array.isArray(body.data)
         ? body.data.map((item: Record<string, unknown>) => typeof item.b64_json === "string" ? (item.b64_json.startsWith("data:") ? item.b64_json : `data:image/png;base64,${item.b64_json}`) : item.url).filter(Boolean)
         : undefined;
       const fashnTask = agentId === "virtual-try-on" && isFashn(target.url) ? body : undefined;
       if (fashnTask?.status === "failed") throw new Error(readableError(fashnTask.error || "真人试穿生成失败"));
       const fashnStatus = fashnTask?.id && !fashnTask?.output ? "processing" : fashnTask?.status === "completed" ? "succeeded" : undefined;
       const fashnOutput = fashnTask?.output ? { images: Array.isArray(fashnTask.output) ? fashnTask.output.map((item: string) => item.startsWith("data:") ? item : (/^[A-Za-z0-9+/=]+$/.test(item) ? `data:image/png;base64,${item}` : item)) : fashnTask.output } : undefined;
-      const videoTask = agentId === "snap-change-video" && isModelVerse(target.url) ? body.output : undefined;
+      const videoTask = agentId === "snap-change-video" && (isModelVerse(target.url) || isArk(target.url)) ? body.output : undefined;
       if (videoTask?.task_status === "Failure") throw new Error(videoTask.error_message || "星图视频任务生成失败");
       const videoStatus = videoTask?.task_status === "Pending" || videoTask?.task_status === "Running" || (videoTask?.task_id && !videoTask?.task_status) ? "processing" : videoTask?.task_status === "Success" ? "succeeded" : undefined;
       const videoOutput = videoTask?.task_status === "Success" ? { video: videoTask.urls?.[0], urls: videoTask.urls } : videoTask;

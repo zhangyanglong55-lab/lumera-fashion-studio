@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./studio-workbench.css";
+import "./v2-layout.css";
+import "./v2-workflow.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "LUMERA · 电商视觉工场",
-  description: "从商品净图、穿搭陈列到动态商拍的一站式电商内容生产平台",
+  description: "从商品净图、真人穿搭到动态商拍的一站式电商内容生产平台",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

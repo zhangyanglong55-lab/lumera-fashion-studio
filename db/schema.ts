@@ -15,6 +15,7 @@ export const videoTemplates = sqliteTable("video_templates", {
 export const promptVideos = sqliteTable("prompt_videos", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
+  code: text("code").notNull().default(""),
   category: text("category").notNull(),
   description: text("description").notNull(),
   prompt: text("prompt").notNull(),

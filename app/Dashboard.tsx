@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 
 const services = [
-  { no: "01", title: "商品净图", text: "智能识别商品主体，清理人物与复杂背景，输出平台通用的标准白底素材。", meta: "原始商品图 → 标准白底图" },
-  { no: "02", title: "穿搭陈列", text: "将多件商品组合成完整造型，生成具有真实体积、层次与材质的隐形人台陈列图。", meta: "白底单品 → 完整穿搭造型" },
-  { no: "03", title: "真人试穿", text: "以固定人物基准图承接每套造型，先生成同一人物的完整试穿效果。", meta: "穿搭造型 + 人物基准 → 真人试穿" },
-  { no: "04", title: "动态商拍", text: "使用已确认的真人试穿图，通过自然响指动作完成连续变装，生成社媒短视频。", meta: "同人物多套试穿 → 10 秒竖版视频" },
+  { no: "01", title: "智能抠白底", text: "上传任意商品图，AI 自动识别主体、清除杂乱背景与杂物，输出干净的标准白底图。", meta: "商品原图 → 标准白底图", icon: "✂️" },
+  { no: "02", title: "模特上身试穿", text: "上传模特参考图和商品白底图，AI 把衣服精准穿到模特身上，脸型、身材保持一致。", meta: "商品 + 模特 → 真人穿搭", icon: "👗" },
+  { no: "03", title: "换装视频生成", text: "基于已生成的穿搭图，用自然响指动作丝滑换装，一键生成 10 秒竖版短视频。", meta: "多套穿搭 → 换装视频", icon: "🎬" },
 ];
 type PromptVideo = { id: string; title: string; category: string; description: string; prompt: string; videoUrl?: string; posterUrl?: string; enabled: boolean; sortOrder: number };
 const slideNames = ["品牌首页", "内容流程", "效果展示", "视频灵感", "制作中心", "关于我们"];
@@ -241,7 +240,7 @@ export default function Dashboard() {
       <div className="commerce-hero-copy">
         <span className="hero-tag"><i/> AI POWERED COMMERCE CONTENT</span>
         <h1>让每一件商品，<br/>拥有完整的<em>视觉表达。</em></h1>
-        <p>从商品原图开始，依次完成商品净图、穿搭陈列、真人试穿和动态商拍。每一步都可检查、可重做、可下载。</p>
+        <p>从商品原图开始，依次完成商品净图、真人穿搭和动态商拍。每一步都可检查、可重做、可下载。</p>
         <div className="hero-actions"><a href="/studio" className="button-light">创建新项目 <span>→</span></a><a href="#showcase" className="button-line">查看制作流程</a></div>
         <div className="trust-row"><span>适用于</span><b>服饰电商</b><b>品牌内容</b><b>社媒投放</b><b>商品上新</b></div>
       </div>
@@ -256,8 +255,8 @@ export default function Dashboard() {
 
     <section id="capabilities" className="capabilities-block">
       <SideRays side="left"/>
-      <header><div><span className="section-label">PRODUCTION FLOW</span><h2>一条真正可控的<br/>电商内容生产线</h2></div><p>不是一次性黑盒生成。每完成一个环节，先检查结果；确认满意后，再进入下一步。</p></header>
-      <div className="service-grid">{services.map((item) => <article key={item.no}><div className="service-number">{item.no}</div><div className="service-icon">{item.no === "01" ? "◐" : item.no === "02" ? "◇" : item.no === "03" ? "◎" : "▶"}</div><h3>{item.title}</h3><p>{item.text}</p><footer>{item.meta}<span>↗</span></footer></article>)}</div>
+      <header><div><span className="section-label">THREE CORE FEATURES</span><h2>三大核心功能<br/>覆盖电商内容全流程</h2></div><p>从商品抠图、模特试穿到换装视频，每一步都由 AI 自动完成，结果可检查、可重做、可下载。</p></header>
+      <div className="service-grid">{services.map((item) => <article key={item.no}><div className="service-number">{item.no}</div><div className="service-icon">{item.icon}</div><h3>{item.title}</h3><p>{item.text}</p><footer>{item.meta}<span>↗</span></footer></article>)}</div>
     </section>
 
     <section id="showcase" className="showcase-block">
@@ -277,7 +276,7 @@ export default function Dashboard() {
 
     <section id="studio" className="production-section">
       <SideRays side="left"/>
-      <div className="studio-entry-copy"><span className="section-label">CONTENT STUDIO</span><h2>一个项目，<br/>五步完成商品内容。</h2><p>制作工作台已独立为清晰的纵向流程。每次只处理当前一步，检查满意后再继续，不再在一个页面里堆满所有设置。</p><ol><li><b>01</b>人物与造型</li><li><b>02</b>商品净图</li><li><b>03</b>穿搭陈列</li><li><b>04</b>真人试穿</li><li><b>05</b>动态视频</li></ol><a href="/studio">进入制作工作台 <span>↗</span></a></div>
+      <div className="studio-entry-copy"><span className="section-label">CONTENT STUDIO</span><h2>一个项目，<br/>四步完成商品内容。</h2><p>制作工作台已独立为清晰的纵向流程。每次只处理当前一步，检查满意后再继续，不再在一个页面里堆满所有设置。</p><ol><li><b>01</b>人物与造型</li><li><b>02</b>商品净图</li><li><b>03</b>真人穿搭</li><li><b>04</b>动态视频</li></ol><a href="/studio">进入制作工作台 <span>↗</span></a></div>
       <div className="studio-entry-visual"><div className="entry-orbit"/><div className="entry-stage active"><span>01</span><b>建立人物与造型</b><small>当前步骤</small></div><div className="entry-stage"><span>02</span><b>逐步生成并确认</b><small>结果可重做</small></div><div className="entry-stage"><span>03</span><b>完成视频交付</b><small>项目可追踪</small></div></div>
     </section>
 
