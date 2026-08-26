@@ -172,6 +172,17 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   function setVideoSlot(index: number, file: File | undefined) {
     setVideoUploads((current) => { const next = [...current]; next[index] = file; return next; });
   }
+  async function saveHistory(result: AgentResult, stage: string, stageName: string) {
+    const urls = collectAssetUrls(result.output);
+    for (const url of urls) {
+      const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(url) || url.startsWith("data:video");
+      try {
+        await fetch("/api/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: isVideo ? "video" : "image", stage, stageName, url }) });
+      } catch {
+        // 保存失败不影响主流程
+      }
+    }
+  }
   function saveConnections() {
     window.localStorage.setItem("snapflow-connections", JSON.stringify(connections));
     setConfigured(requiredAgents.filter(([id]) => Boolean(connections[id]?.url)).map(([id]) => id));
@@ -214,7 +225,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
       const taskId = plan.taskId; setParentTaskId(taskId); setResults((current) => ({ ...current, parent: [plan] })); setStage("parent", "done");
       activeStage = "white"; setStage("white", "running");
       const white = await Promise.all(images.map(async (image, index) => ({...(await callAgent("product-white-bg", { image, lookId: fileMeta[index]?.lookId || "look-1", category:fileMeta[index]?.category || "上衣", productIndex: index }, active["product-white-bg"], taskId)),lookId:fileMeta[index]?.lookId || "look-1",category:fileMeta[index]?.category || "上衣"})));
-      setResults((current) => ({ ...current, white })); setStage("white", "done");
+      setResults((current) => ({ ...current, white })); setStage("white", "done"); white.forEach((r) => saveHistory(r, "product-white-bg", "商品净图"));
       setStudioView("white");
       setMessage("已完成第一步。请检查白底图，满意后点击“下一步：生成真人穿搭”。");
     } catch (error) { setStage(activeStage, "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
@@ -248,7 +259,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
         }
       }
       if (!hollow.length) throw new Error("没有可用的白底图，请先完成商品净图，或在本步骤上传已有白底图");
-      setResults((current) => ({ ...current, hollow })); setStage("hollow", "done");
+      setResults((current) => ({ ...current, hollow })); setStage("hollow", "done"); hollow.forEach((r) => saveHistory(r, "hollow-look", "真人穿搭"));
       setStudioView("hollow");
       setMessage("已完成真人穿搭。请检查人物身份和服装，满意后点击“下一步：生成动态视频”。");
     } catch (error) { setStage("hollow", "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
@@ -279,7 +290,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
         }
       }
       if (video.status === "processing") throw new Error("星图视频生成等待超时，请稍后重试或前往星图模型日志查看任务。");
-      setResults((current) => ({ ...current, video: [video] })); setStage("video", "done");
+      setResults((current) => ({ ...current, video: [video] })); setStage("video", "done"); saveHistory(video, "snap-change-video", "动态商拍");
       setStudioView("video");
       setMessage("已完成第三步，动态商拍视频已生成并保留在结果区。");
     } catch (error) { setStage("video", "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
@@ -299,7 +310,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
     const selectedVideoTemplate = videoTemplates.find(item => item.id === selectedTemplate) || videoTemplates[0];
     const videoLookCount = selectedVideoTemplate?.lookCount || 5;
     return <div className="studio-wizard">
-      <header className="wizard-topbar"><a href="/" className="wizard-brand"><span>L</span><b>LUMERA</b><small>制作工作台</small></a><div className="wizard-project"><i/><span>新建电商素材项目</span><small>生成结果将保留在当前页面</small></div><a href="/" className="wizard-exit">退出工作台 ↗</a></header>
+      <header className="wizard-topbar"><a href="/" className="wizard-brand"><span>L</span><b>LUMERA</b><small>制作工作台</small></a><div className="wizard-project"><i/><span>新建电商素材项目</span><small>生成结果将保留在当前页面</small></div><a href="/history" className="wizard-exit">历史记录 ↗</a><a href="/" className="wizard-exit">退出工作台 ↗</a></header>
       <div className="wizard-shell">
         <aside className="wizard-stepper"><span className="wizard-eyebrow">PRODUCTION FLOW</span><h1>四步完成<br/>商品动态内容</h1><nav>{steps.map(step=><button key={step.id} type="button" disabled={!step.unlocked} className={`${studioView===step.id?"active":""} ${step.done?"complete":""}`} onClick={()=>setStudioView(step.id)}><span>{step.done?"✓":step.number}</span><div><b>{step.name}</b><small>{step.note}</small></div></button>)}</nav><p>每一步确认后才会进入下一步，已有结果可以随时返回查看。</p></aside>
         <main className="wizard-main"><header className="wizard-stage-head"><div><span>STEP {current.number} / 04</span><h2>{current.name}</h2><p>{current.note}</p></div><div className="wizard-progress"><span style={{width:`${Number(current.number)*25}%`}}/></div></header>

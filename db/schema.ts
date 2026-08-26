@@ -28,3 +28,13 @@ export const promptVideos = sqliteTable("prompt_videos", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [index("idx_prompt_videos_enabled_sort").on(table.enabled, table.sortOrder)]);
+
+export const generationHistory = sqliteTable("generation_history", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  stage: text("stage").notNull(),
+  stageName: text("stage_name").notNull(),
+  assetKey: text("asset_key"),
+  url: text("url").notNull(),
+  createdAt: text("created_at").notNull(),
+});

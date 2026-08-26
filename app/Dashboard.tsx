@@ -228,7 +228,7 @@ export default function Dashboard() {
   return <main className="storefront" ref={storefrontRef}>
     <header className="public-nav">
       <a className="lumera-logo" href="#top" aria-label="LUMERA 首页"><span>L</span><b>LUMERA</b><small>电商视觉工场</small></a>
-      <nav className={menuOpen ? "open" : ""}><a href="#capabilities">解决方案</a><a href="#showcase">效果展示</a><a href="#video-gallery">视频灵感</a><a href="#studio">制作中心</a><a href="/admin">运营后台</a></nav>
+      <nav className={menuOpen ? "open" : ""}><a href="#capabilities">解决方案</a><a href="#showcase">效果展示</a><a href="#video-gallery">视频灵感</a><a href="#studio">制作中心</a><a href="/history">历史记录</a><a href="/admin">运营后台</a></nav>
       <div className="nav-actions"><a className="nav-login" href="/admin">管理入口</a><a className="nav-cta" href="/studio">开始制作 <span>↗</span></a></div>
       <button className="mobile-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label="切换菜单">{menuOpen ? "×" : "☰"}</button>
     </header>
