@@ -163,7 +163,7 @@ async function postAgent(agentId: AgentId, target: { url: string; token?: string
 
   if (agentId === "snap-change-video" && (isModelVerse(target.url) || isArk(target.url))) {
     const input = request.input as { phase?: string; taskId?: string; lookCount?: number; videoTemplate?: { prompt?: string; referenceVideo?: string } };
-    const authorization = target.token || "";
+    const authorization = target.token ? `Bearer ${target.token}` : "";
     if (input.phase === "poll" && input.taskId) {
       const statusUrl = target.url.replace(/\/submit\/?$/, "/status");
       return fetch(`${statusUrl}?task_id=${encodeURIComponent(input.taskId)}`, { headers: { Authorization: authorization } });
