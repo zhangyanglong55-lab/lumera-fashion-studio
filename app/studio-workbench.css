@@ -22,3 +22,5 @@ html:has(.studio-wizard),body:has(.studio-wizard),html:has(.admin-shell),body:ha
 
 .template-library-list article{grid-template-columns:90px 1fr auto auto}
 
+
+.look-slots{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:12px}.look-slot{position:relative}.look-slot>label{display:grid;place-items:center;width:100%;aspect-ratio:3/4;border:1px dashed #40513c;border-radius:10px;cursor:pointer;overflow:hidden;background:#111912;color:#6f7d6e;font-size:26px}.look-slot>label img{width:100%;height:100%;object-fit:cover}.look-slot>label small{position:absolute;bottom:4px;left:0;right:0;text-align:center;color:#caff31;font-size:10px}.look-slot>button{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;border:0;background:#2b1715;color:#ff9a8d;cursor:pointer}
