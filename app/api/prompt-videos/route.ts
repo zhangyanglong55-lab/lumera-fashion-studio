@@ -11,6 +11,7 @@ async function ensureTable() {
     category TEXT NOT NULL,
     description TEXT NOT NULL,
     prompt TEXT NOT NULL,
+    look_count INTEGER NOT NULL DEFAULT 5,
     video_url TEXT,
     video_key TEXT,
     poster_url TEXT,
@@ -26,10 +27,15 @@ async function ensureTable() {
   } catch {
     // 列已存在
   }
+  try {
+    await bindings.DB.prepare("ALTER TABLE prompt_videos ADD COLUMN look_count INTEGER NOT NULL DEFAULT 5").run();
+  } catch {
+    // 列已存在
+  }
 }
 
 function present(row: Record<string, unknown>) {
-  return { ...row, videoUrl: row.video_url, posterUrl: row.poster_url, sortOrder: row.sort_order, createdAt: row.created_at, updatedAt: row.updated_at, enabled: Boolean(row.enabled) };
+  return { ...row, videoUrl: row.video_url, posterUrl: row.poster_url, lookCount: row.look_count, sortOrder: row.sort_order, createdAt: row.created_at, updatedAt: row.updated_at, enabled: Boolean(row.enabled) };
 }
 
 export async function GET(request: Request) {
@@ -80,14 +86,15 @@ export async function POST(request: Request) {
     category: String(form.get("category") || "视频灵感"),
     description: String(form.get("description") || ""),
     prompt: String(form.get("prompt") || ""),
+    lookCount: Number(form.get("lookCount") || 5),
     videoUrl, videoKey, posterUrl, posterKey,
     enabled: form.get("enabled") === "false" ? 0 : 1,
     sortOrder: Number(form.get("sortOrder") || 99),
     createdAt: String(existing?.created_at || now), updatedAt: now,
   };
-  await bindings.DB.prepare(`INSERT INTO prompt_videos (id,title,code,category,description,prompt,video_url,video_key,poster_url,poster_key,enabled,sort_order,created_at,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,code=excluded.code,category=excluded.category,description=excluded.description,prompt=excluded.prompt,video_url=excluded.video_url,video_key=excluded.video_key,poster_url=excluded.poster_url,poster_key=excluded.poster_key,enabled=excluded.enabled,sort_order=excluded.sort_order,updated_at=excluded.updated_at`)
-    .bind(values.id, values.title, values.code, values.category, values.description, values.prompt, values.videoUrl, values.videoKey, values.posterUrl, values.posterKey, values.enabled, values.sortOrder, values.createdAt, values.updatedAt).run();
+  await bindings.DB.prepare(`INSERT INTO prompt_videos (id,title,code,category,description,prompt,look_count,video_url,video_key,poster_url,poster_key,enabled,sort_order,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,code=excluded.code,category=excluded.category,description=excluded.description,prompt=excluded.prompt,look_count=excluded.look_count,video_url=excluded.video_url,video_key=excluded.video_key,poster_url=excluded.poster_url,poster_key=excluded.poster_key,enabled=excluded.enabled,sort_order=excluded.sort_order,updated_at=excluded.updated_at`)
+    .bind(values.id, values.title, values.code, values.category, values.description, values.prompt, values.lookCount, values.videoUrl, values.videoKey, values.posterUrl, values.posterKey, values.enabled, values.sortOrder, values.createdAt, values.updatedAt).run();
   return Response.json({ video: { ...values, enabled: Boolean(values.enabled) } });
 }
 
