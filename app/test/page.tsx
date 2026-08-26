@@ -108,6 +108,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [studioView, setStudioView] = useState<StudioView>("setup");
   const [configured, setConfigured] = useState<string[]>([]);
   const [connections, setConnections] = useState<Record<string, Connection>>({});
+  const [customPrompts, setCustomPrompts] = useState<Record<string, string>>({});
   const [connectionSaved, setConnectionSaved] = useState(false);
   const [parentTaskId, setParentTaskId] = useState<string>();
   const [previewImage, setPreviewImage] = useState<string>();
@@ -116,7 +117,9 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     const refreshConnections = () => {
       const saved = JSON.parse(window.localStorage.getItem("lumera-connections") || window.localStorage.getItem("snapflow-connections") || "{}");
+      const savedPrompts = JSON.parse(window.localStorage.getItem("lumera-prompts") || window.localStorage.getItem("snapflow-prompts") || "{}");
       setConnections(saved);
+      setCustomPrompts(savedPrompts);
       fetch("/api/agents/status").then(response => response.json()).then(data => {
         const serverIds = (data.agents || []).filter((item: {connected:boolean}) => item.connected).map((item: {id:string}) => item.id);
         setConfigured(requiredAgents.filter(([id]) => Boolean(saved[id]?.url) || serverIds.includes(id)).map(([id]) => id));
@@ -178,7 +181,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   async function callAgent(agentId: string, input: unknown, connection?: Connection, parentTaskId?: string): Promise<AgentResult> {
     let response: Response;
     try {
-      response = await fetch(`/api/agents/${agentId}/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input, connection, parentTaskId, retryLimit: Number(retryLimit) }) });
+      response = await fetch(`/api/agents/${agentId}/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input, connection, parentTaskId, retryLimit: Number(retryLimit), prompt: customPrompts[agentId] }) });
     } catch {
       throw new Error(`${requiredAgents.find(([id]) => id === agentId)?.[1] || agentId}：请求未能发送。图片可能过大、接口地址不可访问，或第三方服务暂时断开。`);
     }
