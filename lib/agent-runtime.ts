@@ -168,15 +168,17 @@ async function postAgent(agentId: AgentId, target: { url: string; token?: string
       const statusUrl = target.url.replace(/\/submit\/?$/, "/status");
       return fetch(`${statusUrl}?task_id=${encodeURIComponent(input.taskId)}`, { headers: { Authorization: authorization } });
     }
-    const firstFrame = findImage(request.input);
-    if (!firstFrame) throw new Error("星图视频接口没有收到有效的真人穿搭首帧图");
+    const images = collectImages(request.input);
+    if (!images.length) throw new Error("星图视频接口没有收到有效的真人穿搭图");
+    const firstFrame = images[0];
     const templatePrompt = input.videoTemplate?.prompt ? `\n\n视频模板要求：${input.videoTemplate.prompt}` : "";
+    const referenceHint = images.length > 1 ? `\n\n本次共提供 ${images.length} 张参考图，人物形象以第 1 张为准，换装顺序按 1→2→...→${images.length}→1。` : "";
     return fetch(target.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: authorization },
       body: JSON.stringify({
         model: target.model || "MiniMax-Hailuo-2.3",
-        input: { first_frame_image: firstFrame, prompt: `${prompt}${templatePrompt}`, reference_video: input.videoTemplate?.referenceVideo },
+        input: { first_frame_image: firstFrame, prompt: `${prompt}${referenceHint}${templatePrompt}`, reference_video: input.videoTemplate?.referenceVideo },
         parameters: { duration: 10, resolution: "768P", prompt_optimizer: true, fast_pretreatment: false, aigc_watermark: false },
       }),
     });
