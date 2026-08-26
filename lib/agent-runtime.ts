@@ -171,9 +171,8 @@ async function postAgent(agentId: AgentId, target: { url: string; token?: string
     const images = collectImages(request.input);
     if (!images.length) throw new Error("星图视频接口没有收到有效的真人穿搭图");
     const firstFrame = images[0];
-    const lookCount = input.lookCount || images.length;
     const templatePrompt = input.videoTemplate?.prompt ? `\n\n视频模板要求：${input.videoTemplate.prompt}` : "";
-    const referenceHint = images.length > 1 ? `\n\n本次提供 ${images.length} 张参考图，按模板要求换装 ${lookCount} 套，人物形象以第 1 张为准，顺序 1→2→...→${lookCount}→1。` : "";
+    const referenceHint = images.length > 1 ? `\n\n本次提供 ${images.length} 张参考图，人物形象以第 1 张为准，换装顺序按 1→2→...→${images.length}→1 循环。` : "";
     return fetch(target.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: authorization },
