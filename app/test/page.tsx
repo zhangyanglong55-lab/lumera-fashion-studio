@@ -16,6 +16,14 @@ const initialStages: StageMap = { parent: "waiting", white: "waiting", hollow: "
 const garmentCategories = ["上衣", "外套", "下装", "连衣裙", "鞋履", "包袋", "帽子", "眼镜", "配饰"];
 const modelDefaults: Record<string, string> = { orchestrator: "deepseek-v4-pro", "hollow-look": "Qwen/Qwen-Image-Edit", "snap-change-video": "MiniMax-Hailuo-2.3" };
 
+type SubscriptionPlan = { id: string; name: string; price: string; period: string; quota: number; desc: string; popular?: boolean; features: string[] };
+const subscriptionPlans: SubscriptionPlan[] = [
+  { id: "free", name: "基础版", price: "免费", period: "", quota: 5, desc: "适合初次体验", features: ["商品净图与真人穿搭", "每月 5 次视频生成", "基础模板"] },
+  { id: "glimmer", name: "微光版", price: "¥19.9", period: "/周", quota: 30, desc: "小试牛刀", features: ["全部功能", "每周 30 次视频生成", "全部视频模板"] },
+  { id: "illuminate", name: "烛照版", price: "¥39.9", period: "/月", quota: 100, desc: "解锁全部功能", popular: true, features: ["全部功能", "每月 100 次视频生成", "全部模板 + 历史记录"] },
+  { id: "insight", name: "洞见版", price: "¥99.9", period: "/月", quota: 300, desc: "专业创作", features: ["全部功能", "每月 300 次视频生成", "优先处理"] },
+];
+
 const defaultVideoTemplates = [
   { id: "snap-loop", code: "A", name: "响指循环变装", description: "固定正面机位，右手响指触发丝滑换装，结尾回到开场造型。", preview: "/references/reference.mp4", prompt: "采用模板 A：固定正面中景，人物每次用右手打响指后触发连续布料重构，六次变装，结尾回到首套造型形成无缝循环。" },
   { id: "studio-turn", code: "B", name: "转身棚拍切换", description: "轻微转身与整理衣摆，在动作遮挡中自然完成造型切换。", cover: "/references/look-04.jpeg", prompt: "采用模板 B：高级摄影棚固定中景，人物以轻微左右转身、抬手整理衣摆和包袋为动作衔接，在身体自然运动的遮挡阶段连续完成服装演化；节奏舒缓、优雅，不使用闪切。" },
@@ -110,6 +118,8 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [connections, setConnections] = useState<Record<string, Connection>>({});
   const [customPrompts, setCustomPrompts] = useState<Record<string, string>>({});
   const [connectionSaved, setConnectionSaved] = useState(false);
+  const [subscription, setSubscription] = useState<{ plan: string; quota: number }>({ plan: "free", quota: 5 });
+  const [showSubscription, setShowSubscription] = useState(false);
   const [parentTaskId, setParentTaskId] = useState<string>();
   const [previewImage, setPreviewImage] = useState<string>();
   const [results, setResults] = useState<Record<string, AgentResult[]>>({ parent: [], white: [], hollow: [], video: [] });
@@ -187,6 +197,26 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
     window.localStorage.setItem("snapflow-connections", JSON.stringify(connections));
     setConfigured(requiredAgents.filter(([id]) => Boolean(connections[id]?.url)).map(([id]) => id));
     setConnectionSaved(true); window.setTimeout(() => setConnectionSaved(false), 1600);
+  }
+  function getSubscription(): { plan: string; quota: number } {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem("lumera-subscription") || "null");
+      if (saved && typeof saved.quota === "number") return saved;
+    } catch { /* ignore */ }
+    return { plan: "free", quota: 5 };
+  }
+  function subscribe(plan: SubscriptionPlan) {
+    const next = { plan: plan.id, quota: plan.quota };
+    window.localStorage.setItem("lumera-subscription", JSON.stringify(next));
+    setSubscription(next);
+    setShowSubscription(false);
+    setMessage(`已订阅${plan.name}，获得 ${plan.quota} 次视频生成额度`);
+  }
+  function consumeVideoQuota() {
+    const current = getSubscription();
+    current.quota = Math.max(0, (current.quota || 0) - 1);
+    window.localStorage.setItem("lumera-subscription", JSON.stringify(current));
+    setSubscription(current);
   }
 
   async function callAgent(agentId: string, input: unknown, connection?: Connection, parentTaskId?: string): Promise<AgentResult> {
@@ -269,6 +299,8 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   async function runVideoStage() {
     const active = activeConnections();
     if (!configured.includes("snap-change-video") && !active["snap-change-video"]?.url) return setMessage("动态商拍服务未配置，请到运营后台接入。");
+    const currentSub = getSubscription();
+    if ((currentSub.quota || 0) <= 0) { setShowSubscription(true); return setMessage("视频生成额度已用完，请订阅后继续生成"); }
     const template = videoTemplates.find(item => item.id === selectedTemplate) || videoTemplates[0];
     const lookCount = template.lookCount || 5;
     setMessage(""); setRunning(true); setStage("video", "running");
@@ -290,7 +322,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
         }
       }
       if (video.status === "processing") throw new Error("星图视频生成等待超时，请稍后重试或前往星图模型日志查看任务。");
-      setResults((current) => ({ ...current, video: [video] })); setStage("video", "done"); saveHistory(video, "snap-change-video", "动态商拍");
+      setResults((current) => ({ ...current, video: [video] })); setStage("video", "done"); saveHistory(video, "snap-change-video", "动态商拍"); consumeVideoQuota();
       setStudioView("video");
       setMessage("已完成第三步，动态商拍视频已生成并保留在结果区。");
     } catch (error) { setStage("video", "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
@@ -327,7 +359,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
           {studioView==="video" && <section className="wizard-stage-content video-stage"><div className="review-copy"><h3>选择动态模板并生成成片</h3><p>模板决定人物动作、换装节奏和镜头语言；生成前可以反复切换预览。</p></div><div className="local-upload-panel"><div className="local-upload-head"><b>上传穿搭参考图（可选，跳过真人穿搭）</b><small>建议 {videoLookCount} 张，按顺序上传；数量不足也可生成，留空则使用上一步结果</small></div><div className="look-slots">{Array.from({length: videoLookCount}, (_, i) => { const file = videoUploads[i]; return <div className="look-slot" key={i}><input id={`look-slot-${i}`} className="file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event)=>{setVideoSlot(i, event.target.files?.[0]);}}/><label htmlFor={`look-slot-${i}`}>{file ? <img src={videoUploadPreviews[i]} alt={`参考图 ${i + 1}`}/> : <span>＋</span>}<small>参考图 {i + 1}</small></label>{file && <button type="button" onClick={()=>setVideoSlot(i, undefined)}>×</button>}</div>; })}</div>{videoUploads.some(Boolean) && <button type="button" onClick={()=>setVideoUploads([])}>清空全部</button>}</div><div className="wizard-template-grid">{videoTemplates.map(template=><button type="button" key={template.id} className={selectedTemplate===template.id?"selected":""} onClick={()=>setSelectedTemplate(template.id)}>{template.previewUrl||template.preview?<video src={template.previewUrl||template.preview} muted loop autoPlay playsInline/>:<img src={template.cover||"/references/look-03.jpeg"} alt=""/>}<span>{template.code}</span><div><b>{template.name}</b><small>{template.lookCount ? `建议 ${template.lookCount} 张参考图 · ` : ""}{template.description}</small></div><i>{selectedTemplate===template.id?"✓":""}</i></button>)}</div>{results.video.length>0&&<StageResults title="最终动态视频" results={results.video} onPreview={setPreviewImage}/>}<footer className="wizard-actions"><div><b>{videoTemplates.find(item=>item.id===selectedTemplate)?.name}</b><small>10 秒 · 9:16 · 30fps · 建议 {videoTemplates.find(item=>item.id===selectedTemplate)?.lookCount || 5} 张参考图</small></div><button className="wizard-primary" onClick={runVideoStage} disabled={running}>{running?"正在生成视频…":results.video.length?"重新生成视频":"生成最终视频 →"}</button></footer></section>}
           {message&&<div className={`wizard-message ${message.startsWith("已完成")?"success":"error"}`}>{message}</div>}
         </main>
-      </div>{previewImage&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setPreviewImage(undefined)}><button type="button" onClick={()=>setPreviewImage(undefined)}>×</button><img src={previewImage} alt="生成结果细节" onClick={event=>event.stopPropagation()}/></div>}
+      </div>{previewImage&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setPreviewImage(undefined)}><button type="button" onClick={()=>setPreviewImage(undefined)}>×</button><img src={previewImage} alt="生成结果细节" onClick={event=>event.stopPropagation()}/></div>}{showSubscription&&<div className="subscription-backdrop" role="dialog" aria-modal="true" onClick={()=>setShowSubscription(false)}><section className="subscription-modal" onClick={event=>event.stopPropagation()}><header><div><span>MEMBERSHIP</span><h2>升级会员，解锁无限创作</h2><p>视频生成需要订阅额度，选择适合你的方案。</p></div><button onClick={()=>setShowSubscription(false)} aria-label="关闭">×</button></header><div className="subscription-plans">{subscriptionPlans.map(plan=><article key={plan.id} className={plan.popular?"popular":""}>{plan.popular&&<span className="popular-badge">最受欢迎</span>}<h3>{plan.name}</h3><div className="plan-price">{plan.price}<small>{plan.period}</small></div><p>{plan.desc}</p><ul>{plan.features.map((feature,i)=><li key={i}>✓ {feature}</li>)}</ul><button onClick={()=>subscribe(plan)}>{plan.id==="free"?"继续免费":"立即订阅"}</button></article>)}</div></section></div>}
     </div>;
   }
   return <div className={`test-shell ${embedded ? "embedded-test-shell" : ""}`}>{!embedded && <header className="test-head"><div><span className="kicker">UNIFIED WORKSPACE</span><h1>API 配置与流水线测试台</h1><p>在一个页面完成接口接入、素材上传、分阶段生成与结果验收。</p></div><a className="back" href="/">← 返回调度中心</a></header>}
