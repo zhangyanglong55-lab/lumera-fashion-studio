@@ -243,7 +243,6 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   }
 
   async function runWhiteStage() {
-    if (!hasQuota("product-white-bg")) { setShowSubscription(true); return setMessage("白底图免费次数已用完，请订阅后继续生成"); }
     setMessage(""); setStages(initialStages); setResults({ parent: [], white: [], hollow: [], video: [] });
     setParentTaskId(undefined);
     const active = activeConnections();
@@ -259,7 +258,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
       const taskId = plan.taskId; setParentTaskId(taskId); setResults((current) => ({ ...current, parent: [plan] })); setStage("parent", "done");
       activeStage = "white"; setStage("white", "running");
       const white = await Promise.all(images.map(async (image, index) => ({...(await callAgent("product-white-bg", { image, lookId: fileMeta[index]?.lookId || "look-1", category:fileMeta[index]?.category || "上衣", productIndex: index }, active["product-white-bg"], taskId)),lookId:fileMeta[index]?.lookId || "look-1",category:fileMeta[index]?.category || "上衣"})));
-      setResults((current) => ({ ...current, white })); setStage("white", "done"); white.forEach((r) => saveHistory(r, "product-white-bg", "商品净图")); consumeQuota("product-white-bg");
+      setResults((current) => ({ ...current, white })); setStage("white", "done"); white.forEach((r) => saveHistory(r, "product-white-bg", "商品净图"));
       setStudioView("white");
       setMessage("已完成第一步。请检查白底图，满意后点击“下一步：生成真人穿搭”。");
     } catch (error) { setStage(activeStage, "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
@@ -267,7 +266,6 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   }
 
   async function runHollowStage() {
-    if (!hasQuota("hollow-look")) { setShowSubscription(true); return setMessage("真人穿搭免费次数已用完，请订阅后继续生成"); }
     if (!personFile) return setMessage("请先上传一张正面全身人物基准图。");
     const active = activeConnections();
     if (!configured.includes("hollow-look") && !active["hollow-look"]?.url) return setMessage("真人穿搭服务未配置，请到运营后台接入。");
@@ -294,7 +292,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
         }
       }
       if (!hollow.length) throw new Error("没有可用的白底图，请先完成商品净图，或在本步骤上传已有白底图");
-      setResults((current) => ({ ...current, hollow })); setStage("hollow", "done"); hollow.forEach((r) => saveHistory(r, "hollow-look", "真人穿搭")); consumeQuota("hollow-look");
+      setResults((current) => ({ ...current, hollow })); setStage("hollow", "done"); hollow.forEach((r) => saveHistory(r, "hollow-look", "真人穿搭"));
       setStudioView("hollow");
       setMessage("已完成真人穿搭。请检查人物身份和服装，满意后点击“下一步：生成动态视频”。");
     } catch (error) { setStage("hollow", "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
@@ -304,7 +302,6 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   async function runVideoStage() {
     const active = activeConnections();
     if (!configured.includes("snap-change-video") && !active["snap-change-video"]?.url) return setMessage("动态商拍服务未配置，请到运营后台接入。");
-    if (!hasQuota("snap-change-video")) { setShowSubscription(true); return setMessage("视频生成额度已用完，请订阅后继续生成"); }
     const template = videoTemplates.find(item => item.id === selectedTemplate) || videoTemplates[0];
     const lookCount = template.lookCount || 5;
     setMessage(""); setRunning(true); setStage("video", "running");
@@ -326,7 +323,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
         }
       }
       if (video.status === "processing") throw new Error("星图视频生成等待超时，请稍后重试或前往星图模型日志查看任务。");
-      setResults((current) => ({ ...current, video: [video] })); setStage("video", "done"); saveHistory(video, "snap-change-video", "动态商拍"); consumeQuota("snap-change-video");
+      setResults((current) => ({ ...current, video: [video] })); setStage("video", "done"); saveHistory(video, "snap-change-video", "动态商拍");
       setStudioView("video");
       setMessage("已完成第三步，动态商拍视频已生成并保留在结果区。");
     } catch (error) { setStage("video", "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
