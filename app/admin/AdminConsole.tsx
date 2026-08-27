@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { agents, orchestrator } from "../../lib/agents";
+import { loadPlans, savePlans, type SubscriptionPlan } from "../../lib/plans";
 
 type Connections = Record<string, { url: string; token: string; model?: string }>;
 type ApiStatus = { id: string; name: string; connected: boolean };
@@ -18,6 +19,8 @@ export default function AdminConsole() {
   const [connections, setConnections] = useState<Connections>({});
   const [status, setStatus] = useState<ApiStatus[]>([]);
   const [saved, setSaved] = useState(false);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [plansSaved, setPlansSaved] = useState(false);
   const [promptId, setPromptId] = useState("orchestrator");
   const [prompts, setPrompts] = useState<Record<string,string>>({});
   const [showKeys, setShowKeys] = useState<Record<string,boolean>>({});
@@ -33,6 +36,7 @@ export default function AdminConsole() {
     agents.forEach((agent) => defaults[agent.id] = agent.prompt);
     setPrompts({ ...defaults, ...JSON.parse(localStorage.getItem("lumera-prompts") || localStorage.getItem("snapflow-prompts") || "{}") });
     setConnections(JSON.parse(localStorage.getItem("lumera-connections") || localStorage.getItem("snapflow-connections") || "{}"));
+    setPlans(loadPlans());
     fetch("/api/agents/status").then(r => r.json()).then(data => setStatus(data.agents || [])).catch(() => setStatus([]));
   }, []);
   function refreshGallery() { fetch("/api/prompt-videos?all=1").then(response => response.json()).then(data => setGalleryVideos(data.videos || [])).catch(() => setGalleryVideos([])); }
@@ -47,6 +51,13 @@ export default function AdminConsole() {
     localStorage.setItem("lumera-prompts", JSON.stringify(prompts));
     localStorage.setItem("snapflow-prompts", JSON.stringify(prompts));
     window.dispatchEvent(new Event("snapflow-connections-updated")); setSaved(true); setTimeout(() => setSaved(false), 1800);
+  }
+  function updatePlan(index: number, field: keyof SubscriptionPlan, value: unknown) {
+    setPlans((current) => current.map((plan, i) => i === index ? { ...plan, [field]: value } : plan));
+  }
+  function savePricing() {
+    savePlans(plans);
+    setPlansSaved(true); setTimeout(() => setPlansSaved(false), 1800);
   }
   async function saveGalleryVideo() {
     if (!galleryForm.title || !galleryForm.prompt) return setGalleryMessage("请填写视频名称和完整提示词");
@@ -79,9 +90,10 @@ export default function AdminConsole() {
       <button className={active === "connections" ? "active" : ""} onClick={() => setActive("connections")}><i>⌁</i><span>服务接入</span></button>
       <button className={active === "prompts" ? "active" : ""} onClick={() => setActive("prompts")}><i>✦</i><span>生成策略</span></button>
       <button className={active === "gallery" ? "active" : ""} onClick={() => setActive("gallery")}><i>◉</i><span>视频灵感库</span></button>
+      <button className={active === "pricing" ? "active" : ""} onClick={() => setActive("pricing")}><i>￥</i><span>订阅价格</span></button>
       <button className={active === "diagnostics" ? "active" : ""} onClick={() => setActive("diagnostics")}><i>◫</i><span>接口诊断</span></button>
     </nav><div className="admin-sidefoot"><i/><span>服务控制台在线</span><a href="/">返回前台 ↗</a></div></aside>
-    <section className="admin-main"><header className="admin-topbar"><div><span>COMMERCE CONTENT OS</span><h1>{active === "overview" ? "运行概览" : active === "connections" ? "服务接入" : active === "prompts" ? "生成策略" : active === "gallery" ? "视频灵感库" : "接口诊断"}</h1></div><div className="admin-user"><span>LY</span><div><b>内容管理员</b><small>Administrator</small></div></div></header>
+    <section className="admin-main"><header className="admin-topbar"><div><span>COMMERCE CONTENT OS</span><h1>{active === "overview" ? "运行概览" : active === "connections" ? "服务接入" : active === "prompts" ? "生成策略" : active === "gallery" ? "视频灵感库" : active === "pricing" ? "订阅价格" : "接口诊断"}</h1></div><div className="admin-user"><span>LY</span><div><b>内容管理员</b><small>Administrator</small></div></div></header>
 
       {active === "overview" && <div className="admin-content"><div className="admin-welcome"><div><span>GOOD MORNING</span><h2>今天的内容生产系统<br/>运行稳定。</h2><p>所有素材处理服务均通过统一后端调用，前台不展示接口与密钥。</p></div><div className="health-ring"><b>{configuredCount}/5</b><span>服务已连接</span></div></div><div className="stat-grid"><article><span>今日项目</span><b>12</b><small>较昨日 +18%</small></article><article><span>已生成素材</span><b>48</b><small>成功率 96.8%</small></article><article><span>平均处理时间</span><b>3m 42s</b><small>近 7 日均值</small></article></div><div className="activity-panel"><header><h3>生产链路</h3><span>实时状态</span></header>{systems.map((item,index) => <div className="activity-row" key={item.id}><i style={{background:item.color}}/><b>{item.name}</b><span>{item.desc}</span><em>{status.find(s => s.id === item.id)?.connected || connections[item.id]?.url ? "运行中" : "待接入"}</em><small>0{index + 1}</small></div>)}</div></div>}
 
@@ -100,6 +112,7 @@ export default function AdminConsole() {
         </div>
         <div className="gallery-management-grid">{Array.from({length:6},(_,index)=>galleryVideos[index] || null).map((video,index)=>video ? <article key={video.id} className={video.enabled ? "active" : "inactive"}><div className="gallery-admin-media">{video.videoUrl ? <video src={video.videoUrl} poster={video.posterUrl} muted playsInline controls preload="metadata"/> : <div className="template-empty">VIDEO</div>}<span>位置 0{index+1}</span></div><div className="gallery-admin-info"><small>{video.code ? `模板 ${video.code} · ` : ""}{video.lookCount ? `需 ${video.lookCount} 张参考图 · ` : ""}{video.category} · 排序 {video.sortOrder}</small><h3>{video.title}</h3><p>{video.description}</p></div><div className="gallery-admin-actions"><button onClick={()=>editGalleryVideo(video)}>编辑资料</button><label><input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={event=>{const file=event.target.files?.[0];if(file)replaceGalleryAsset(video,file,"video");event.currentTarget.value=""}}/>替换视频</label><label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>{const file=event.target.files?.[0];if(file)replaceGalleryAsset(video,file,"poster");event.currentTarget.value=""}}/>替换封面</label><button className={video.enabled ? "enabled" : "disabled"} onClick={()=>toggleGalleryVideo(video)}>{video.enabled ? "已启用" : "已停用"}</button><button className="gallery-delete" onClick={()=>deleteGalleryVideo(video.id)}>删除</button></div></article> : <article className="empty-slot" key={`slot-${index}`}><div><span>＋</span><b>位置 0{index+1}</b><p>上传一个新视频后将自动进入此位置</p></div></article>)}</div>
       </div>}
+      {active === "pricing" && <div className="admin-content"><div className="content-heading"><div><span>SUBSCRIPTION PLANS</span><h2>订阅价格</h2><p>管理用户生成视频时的订阅方案和额度，保存后前台订阅弹窗立即生效。</p></div><button onClick={savePricing}>{plansSaved ? "已保存 ✓" : "保存价格"}</button></div><div className="pricing-admin-grid">{plans.map((plan, index) => <article key={plan.id} className={plan.popular ? "popular" : ""}><header><input value={plan.name} onChange={e=>updatePlan(index,"name",e.target.value)}/><label className="popular-toggle"><input type="checkbox" checked={!!plan.popular} onChange={e=>updatePlan(index,"popular",e.target.checked)}/> 最受欢迎</label></header><div className="pricing-admin-row"><label><span>价格</span><input value={plan.price} onChange={e=>updatePlan(index,"price",e.target.value)}/></label><label><span>周期</span><input value={plan.period} onChange={e=>updatePlan(index,"period",e.target.value)}/></label></div><label><span>视频额度</span><input type="number" min="0" value={plan.quota} onChange={e=>updatePlan(index,"quota",Number(e.target.value))}/></label><label><span>一句话描述</span><input value={plan.desc} onChange={e=>updatePlan(index,"desc",e.target.value)}/></label><label><span>功能特性（用逗号分隔）</span><textarea value={plan.features.join("，")} onChange={e=>updatePlan(index,"features",e.target.value.split(/[，,]/).map(s=>s.trim()).filter(Boolean))}/></label></article>)}</div></div>}
     </section>
   </main>;
 }
