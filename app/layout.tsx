@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import DifyChatbot from "./components/DifyChatbot";
 import "./globals.css";
 import "./studio-workbench.css";
 import "./v2-layout.css";
@@ -35,6 +36,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <DifyChatbot />
       </body>
     </html>
   );

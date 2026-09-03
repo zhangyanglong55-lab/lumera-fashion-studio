@@ -22,7 +22,7 @@ const defaultVideoTemplates = [
   { id: "studio-turn", code: "B", name: "转身棚拍切换", description: "轻微转身与整理衣摆，在动作遮挡中自然完成造型切换。", cover: "/references/look-04.jpeg", prompt: "采用模板 B：高级摄影棚固定中景，人物以轻微左右转身、抬手整理衣摆和包袋为动作衔接，在身体自然运动的遮挡阶段连续完成服装演化；节奏舒缓、优雅，不使用闪切。" },
   { id: "runway-step", code: "C", name: "走秀步点变装", description: "小幅向前走动，每个步点完成一次完整造型演化。", cover: "/references/look-03.jpeg", prompt: "采用模板 C：人物始终位于画面中心，在摄影棚内进行克制的小幅向前走秀；每个清晰步点触发一次全身服装连续重构，镜头保持稳定，动作与服装演化节拍严格同步。" },
 ] as const;
-type VideoTemplate = { id: string; code: string; name: string; description: string; prompt: string; lookCount: number; preview?: string; previewUrl?: string; cover?: string };
+type VideoTemplate = { id: string; code: string; name: string; description: string; prompt: string; lookCount?: number; preview?: string; previewUrl?: string; cover?: string };
 
 function collectAssetUrls(value: unknown, found = new Set<string>()): string[] {
   if (typeof value === "string" && (/^(https?:|data:image|data:video)/.test(value))) found.add(value);
@@ -98,13 +98,13 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [personPreview, setPersonPreview] = useState("");
   const [hollowUploads, setHollowUploads] = useState<File[]>([]);
   const [hollowUploadPreviews, setHollowUploadPreviews] = useState<string[]>([]);
-  const [videoUploads, setVideoUploads] = useState<File[]>([]);
+  const [videoUploads, setVideoUploads] = useState<(File | undefined)[]>([]);
   const [videoUploadPreviews, setVideoUploadPreviews] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState("");
   const [retryLimit, setRetryLimit] = useState("2");
   const [videoTemplates, setVideoTemplates] = useState<VideoTemplate[]>([...defaultVideoTemplates]);
-  const [selectedTemplate, setSelectedTemplate] = useState(defaultVideoTemplates[0].id);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>(defaultVideoTemplates[0].id);
   const [stages, setStages] = useState<StageMap>(initialStages);
   const [studioView, setStudioView] = useState<StudioView>("setup");
   const [configured, setConfigured] = useState<string[]>([]);
@@ -198,7 +198,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
     } catch { /* ignore */ }
     return defaultSubscription();
   }
-  function quotaKey(stage: string): keyof Subscription {
+  function quotaKey(stage: string): "whiteQuota" | "hollowQuota" | "videoQuota" {
     return stage === "product-white-bg" ? "whiteQuota" : stage === "hollow-look" ? "hollowQuota" : "videoQuota";
   }
   function hasQuota(stage: string): boolean {
@@ -300,6 +300,11 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
   }
 
   async function runVideoStage() {
+    if (!hasQuota("snap-change-video")) {
+      setMessage("");
+      setShowSubscription(true);
+      return;
+    }
     const active = activeConnections();
     if (!configured.includes("snap-change-video") && !active["snap-change-video"]?.url) return setMessage("动态商拍服务未配置，请到运营后台接入。");
     const template = videoTemplates.find(item => item.id === selectedTemplate) || videoTemplates[0];
@@ -323,7 +328,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
         }
       }
       if (video.status === "processing") throw new Error("星图视频生成等待超时，请稍后重试或前往星图模型日志查看任务。");
-      setResults((current) => ({ ...current, video: [video] })); setStage("video", "done"); saveHistory(video, "snap-change-video", "动态商拍");
+      setResults((current) => ({ ...current, video: [video] })); setStage("video", "done"); consumeQuota("snap-change-video"); saveHistory(video, "snap-change-video", "动态商拍");
       setStudioView("video");
       setMessage("已完成第三步，动态商拍视频已生成并保留在结果区。");
     } catch (error) { setStage("video", "failed"); setMessage(error instanceof Error ? error.message : String(error)); }
@@ -357,7 +362,7 @@ export function TestWorkspace({ embedded = false }: { embedded?: boolean }) {
           </section>}
           {studioView==="white" && <section className="wizard-stage-content review-stage"><div className="review-copy"><h3>逐件检查商品轮廓和颜色</h3><p>确认主体完整、背景纯白、没有残留人物或复杂背景，再进入真人穿搭。</p></div><StageResults title="商品净图" results={results.white} onPreview={setPreviewImage}/><footer className="wizard-actions"><button className="wizard-secondary" onClick={runWhiteStage} disabled={running}>重新生成</button><button className="wizard-primary" onClick={runHollowStage} disabled={running}>确认，生成真人穿搭 →</button></footer></section>}
           {studioView==="hollow" && <section className="wizard-stage-content review-stage"><div className="review-copy"><h3>检查人物身份与每套穿搭</h3><p>重点检查脸型、发型、身材比例是否与人物基准图一致，以及服装是否真正贴合人物。</p></div><div className="local-upload-panel"><div className="local-upload-head"><b>上传已有白底图（可选，跳过商品净图）</b><small>留空则使用上一步结果</small></div><input id="hollow-upload" className="file-input" type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event)=>{setHollowUploads(Array.from(event.target.files||[]));}}/><label className="compact-upload" htmlFor="hollow-upload">＋ 上传白底商品图</label>{hollowUploadPreviews.length>0&&<div className="upload-thumbs">{hollowUploadPreviews.map((url,index)=><img key={`${url}-${index}`} src={url} alt="白底图"/>)}<button type="button" onClick={()=>{setHollowUploads([]);setHollowUploadPreviews([]);}}>清空</button></div>}</div><div className="identity-compare">{personPreview&&<article><span>人物基准</span><img src={personPreview} alt="人物基准"/></article>}<StageResults title="真人穿搭" results={results.hollow} onPreview={setPreviewImage}/></div><footer className="wizard-actions"><button className="wizard-secondary" onClick={runHollowStage} disabled={running}>重新生成</button><button className="wizard-primary" onClick={()=>setStudioView("video")} disabled={running}>确认，选择视频模板 →</button></footer></section>}
-          {studioView==="video" && <section className="wizard-stage-content video-stage"><div className="review-copy"><h3>选择动态模板并生成成片</h3><p>模板决定人物动作、换装节奏和镜头语言；生成前可以反复切换预览。</p></div><div className="local-upload-panel"><div className="local-upload-head"><b>上传穿搭参考图（可选，跳过真人穿搭）</b><small>建议 {videoLookCount} 张，按顺序上传；数量不足也可生成，留空则使用上一步结果</small></div><div className="look-slots">{Array.from({length: videoLookCount}, (_, i) => { const file = videoUploads[i]; return <div className="look-slot" key={i}><input id={`look-slot-${i}`} className="file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event)=>{setVideoSlot(i, event.target.files?.[0]);}}/><label htmlFor={`look-slot-${i}`}>{file ? <img src={videoUploadPreviews[i]} alt={`参考图 ${i + 1}`}/> : <span>＋</span>}<small>参考图 {i + 1}</small></label>{file && <button type="button" onClick={()=>setVideoSlot(i, undefined)}>×</button>}</div>; })}</div>{videoUploads.some(Boolean) && <button type="button" onClick={()=>setVideoUploads([])}>清空全部</button>}</div><div className="wizard-template-grid">{videoTemplates.map(template=><button type="button" key={template.id} className={selectedTemplate===template.id?"selected":""} onClick={()=>setSelectedTemplate(template.id)}>{template.previewUrl||template.preview?<video src={template.previewUrl||template.preview} muted loop autoPlay playsInline/>:<img src={template.cover||"/references/look-03.jpeg"} alt=""/>}<span>{template.code}</span><div><b>{template.name}</b><small>{template.lookCount ? `建议 ${template.lookCount} 张参考图 · ` : ""}{template.description}</small></div><i>{selectedTemplate===template.id?"✓":""}</i></button>)}</div>{results.video.length>0&&<StageResults title="最终动态视频" results={results.video} onPreview={setPreviewImage}/>}<footer className="wizard-actions"><div><b>{videoTemplates.find(item=>item.id===selectedTemplate)?.name}</b><small>10 秒 · 9:16 · 30fps · 建议 {videoTemplates.find(item=>item.id===selectedTemplate)?.lookCount || 5} 张参考图</small></div><button className="wizard-primary" onClick={runVideoStage} disabled={running}>{running?"正在生成视频…":results.video.length?"重新生成视频":"生成最终视频 →"}</button></footer></section>}
+          {studioView==="video" && <section className="wizard-stage-content video-stage"><div className="review-copy"><h3>选择动态模板并生成成片</h3><p>模板决定人物动作、换装节奏和镜头语言；生成前可以反复切换预览。</p></div><div className="local-upload-panel"><div className="local-upload-head"><b>上传穿搭参考图（可选，跳过真人穿搭）</b><small>建议 {videoLookCount} 张，按顺序上传；数量不足也可生成，留空则使用上一步结果</small></div><div className="look-slots">{Array.from({length: videoLookCount}, (_, i) => { const file = videoUploads[i]; return <div className="look-slot" key={i}><input id={`look-slot-${i}`} className="file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event)=>{setVideoSlot(i, event.target.files?.[0]);}}/><label htmlFor={`look-slot-${i}`}>{file ? <img src={videoUploadPreviews[i]} alt={`参考图 ${i + 1}`}/> : <span>＋</span>}<small>参考图 {i + 1}</small></label>{file && <button type="button" onClick={()=>setVideoSlot(i, undefined)}>×</button>}</div>; })}</div>{videoUploads.some(Boolean) && <button type="button" onClick={()=>setVideoUploads([])}>清空全部</button>}</div><div className="wizard-template-grid">{videoTemplates.map(template=><button type="button" key={template.id} className={selectedTemplate===template.id?"selected":""} onClick={()=>setSelectedTemplate(template.id)}>{template.previewUrl||template.preview?<video src={template.previewUrl||template.preview} muted loop autoPlay playsInline/>:<img src={template.cover||"/references/look-03.jpeg"} alt=""/>}<span>{template.code}</span><div><b>{template.name}</b><small>{template.lookCount ? `建议 ${template.lookCount} 张参考图 · ` : ""}{template.description}</small></div><i>{selectedTemplate===template.id?"✓":""}</i></button>)}</div>{results.video.length>0&&<StageResults title="最终动态视频" results={results.video} onPreview={setPreviewImage}/>}<footer className="wizard-actions"><div><b>{videoTemplates.find(item=>item.id===selectedTemplate)?.name}</b><small>10 秒 · 9:16 · 30fps · 建议 {videoTemplates.find(item=>item.id===selectedTemplate)?.lookCount || 5} 张参考图{hasQuota("snap-change-video") ? "" : " · 视频生成需订阅"}</small></div><button className="wizard-secondary" type="button" onClick={()=>setShowSubscription(true)}>订阅视频额度</button><button className="wizard-primary" onClick={runVideoStage} disabled={running}>{running?"正在生成视频…":results.video.length?"重新生成视频":"生成最终视频 →"}</button></footer></section>}
           {message&&<div className={`wizard-message ${message.startsWith("已完成")?"success":"error"}`}>{message}</div>}
         </main>
       </div>{previewImage&&<div className="image-lightbox" role="dialog" aria-modal="true" onClick={()=>setPreviewImage(undefined)}><button type="button" onClick={()=>setPreviewImage(undefined)}>×</button><img src={previewImage} alt="生成结果细节" onClick={event=>event.stopPropagation()}/></div>}{showSubscription&&<div className="subscription-backdrop" role="dialog" aria-modal="true" onClick={()=>setShowSubscription(false)}><section className="subscription-modal" onClick={event=>event.stopPropagation()}><header><div><span>MEMBERSHIP</span><h2>升级会员，解锁无限创作</h2><p>免费版：白底图 5 次、真人穿搭 3 次，视频生成需订阅。选择方案解锁更多额度。</p></div><button onClick={()=>setShowSubscription(false)} aria-label="关闭">×</button></header><div className="subscription-plans">{loadPlans().map(plan=><article key={plan.id} className={plan.popular?"popular":""}>{plan.popular&&<span className="popular-badge">最受欢迎</span>}<h3>{plan.name}</h3><div className="plan-price">{plan.price}<small>{plan.period}</small></div><p>{plan.desc}</p><ul>{plan.features.map((feature,i)=><li key={i}>✓ {feature}</li>)}</ul><button onClick={()=>subscribe(plan)}>{plan.id==="free"?"暂不订阅":"立即订阅"}</button></article>)}</div></section></div>}

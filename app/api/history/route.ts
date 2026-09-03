@@ -1,23 +1,14 @@
-import { env } from "cloudflare:workers";
+import { readTable, writeTable, putMedia, deleteMedia } from "../../../lib/tos";
 
-type Bindings = { DB: D1Database; TEMPLATE_MEDIA: R2Bucket };
-const bindings = env as unknown as Bindings;
-
-async function ensureTable() {
-  await bindings.DB.prepare(`CREATE TABLE IF NOT EXISTS generation_history (
-    id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    stage TEXT NOT NULL,
-    stage_name TEXT NOT NULL,
-    asset_key TEXT,
-    url TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  )`).run();
-}
-
-function present(row: Record<string, unknown>) {
-  return { ...row, stageName: row.stage_name, assetKey: row.asset_key, createdAt: row.created_at };
-}
+type HistoryRow = {
+  id: string;
+  type: string;
+  stage: string;
+  stageName: string;
+  assetKey?: string;
+  url: string;
+  createdAt: string;
+};
 
 function dataUrlInfo(dataUrl: string) {
   const [header, encoded] = dataUrl.split(",", 2);
@@ -27,13 +18,12 @@ function dataUrlInfo(dataUrl: string) {
 }
 
 export async function GET() {
-  await ensureTable();
-  const result = await bindings.DB.prepare("SELECT * FROM generation_history ORDER BY created_at DESC LIMIT 120").all();
-  return Response.json({ history: result.results.map((row: Record<string, unknown>) => present(row)) });
+  const history = await readTable<HistoryRow>("generation_history");
+  history.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return Response.json({ history: history.slice(0, 120) });
 }
 
 export async function POST(request: Request) {
-  await ensureTable();
   const body = await request.json().catch(() => null) as null | { type?: string; stage?: string; stageName?: string; url?: string };
   if (!body?.type || !body?.stage || !body?.url) return Response.json({ error: "缺少 type / stage / url 参数" }, { status: 400 });
 
@@ -47,23 +37,31 @@ export async function POST(request: Request) {
     if (!encoded) return Response.json({ error: "无效的 data URL" }, { status: 400 });
     assetKey = `history/${id}.${ext}`;
     const bytes = Buffer.from(encoded, "base64");
-    await bindings.TEMPLATE_MEDIA.put(assetKey, bytes, { httpMetadata: { contentType: mime } });
+    await putMedia(assetKey, bytes, mime);
     url = `/api/video-templates/media/${encodeURIComponent(assetKey)}`;
   }
 
-  await bindings.DB.prepare(`INSERT INTO generation_history (id, type, stage, stage_name, asset_key, url, created_at)
-    VALUES (?,?,?,?,?,?,?)`)
-    .bind(id, type, body.stage, body.stageName || body.stage, assetKey, url, new Date().toISOString()).run();
-
+  const row: HistoryRow = {
+    id,
+    type,
+    stage: body.stage,
+    stageName: body.stageName || body.stage,
+    assetKey,
+    url,
+    createdAt: new Date().toISOString(),
+  };
+  const history = await readTable<HistoryRow>("generation_history");
+  history.unshift(row);
+  await writeTable("generation_history", history.slice(0, 500));
   return Response.json({ ok: true, id });
 }
 
 export async function DELETE(request: Request) {
-  await ensureTable();
   const { id } = await request.json().catch(() => ({})) as { id?: string };
   if (!id) return Response.json({ error: "缺少 ID" }, { status: 400 });
-  const row = await bindings.DB.prepare("SELECT asset_key FROM generation_history WHERE id = ?").bind(id).first<Record<string, unknown>>();
-  await bindings.DB.prepare("DELETE FROM generation_history WHERE id = ?").bind(id).run();
-  if (row?.asset_key) await bindings.TEMPLATE_MEDIA.delete(String(row.asset_key));
+  const history = await readTable<HistoryRow>("generation_history");
+  const row = history.find((item) => item.id === id);
+  if (row?.assetKey) await deleteMedia(row.assetKey);
+  await writeTable("generation_history", history.filter((item) => item.id !== id));
   return Response.json({ ok: true });
 }

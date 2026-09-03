@@ -1,1 +1,0 @@
-CREATE INDEX `idx_prompt_videos_enabled_sort` ON `prompt_videos` (`enabled`,`sort_order`);
